@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7,6 +9,8 @@ pub struct Config {
     pub database_url: String,
     pub cors_origins: Vec<String>,
     pub public_url: String,
+    pub sand_bin: Option<PathBuf>,
+    pub data_dir: PathBuf,
 }
 
 impl Default for Config {
@@ -22,6 +26,8 @@ impl Default for Config {
                 "https://www.cloudcell.dev".to_string(),
             ],
             public_url: "http://127.0.0.1:8080".to_string(),
+            sand_bin: None,
+            data_dir: PathBuf::from("data"),
         }
     }
 }
@@ -52,6 +58,16 @@ impl Config {
         }
         if let Ok(public_url) = std::env::var("CLOUDCELL_PUBLIC_URL") {
             cfg.public_url = public_url;
+        }
+        if let Ok(sand) = std::env::var("CLOUDCELL_SAND")
+            && !sand.is_empty()
+        {
+            cfg.sand_bin = Some(PathBuf::from(sand));
+        }
+        if let Ok(dir) = std::env::var("CLOUDCELL_DATA_DIR")
+            && !dir.is_empty()
+        {
+            cfg.data_dir = PathBuf::from(dir);
         }
         cfg
     }

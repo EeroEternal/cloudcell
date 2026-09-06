@@ -18,6 +18,7 @@ async fn main() -> Result<()> {
         %addr,
         public_url = %config.public_url,
         database_url = %config.database_url,
+        sand = ?config.sand_bin,
         "starting cloudcell api"
     );
 

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+use crate::cell;
 use crate::error::{Error, Result};
 use crate::snapshot;
 use crate::state::AppState;
@@ -140,7 +141,7 @@ pub async fn create_sandbox(
         return Err(Error::BadRequest("pids must be > 0".into()));
     }
 
-    let sandbox = Sandbox {
+    let mut sandbox = Sandbox {
         id: Uuid::new_v4().to_string(),
         snapshot,
         state: SandboxState::Pending,
@@ -152,6 +153,15 @@ pub async fn create_sandbox(
     };
     let egress_json =
         serde_json::to_string(&sandbox.egress).map_err(|e| Error::Internal(anyhow::anyhow!(e)))?;
+
+    if let Some(sand) = &state.config.sand_bin
+        && !sand.is_file()
+    {
+        return Err(Error::Config(format!(
+            "sand binary not found: {}",
+            sand.display()
+        )));
+    }
 
     sqlx::query(
         "INSERT INTO sandboxes
@@ -168,6 +178,46 @@ pub async fn create_sandbox(
     .bind(sandbox.created_at.to_rfc3339())
     .execute(&state.db)
     .await?;
+
+    if let Some(sand) = state.config.sand_bin.clone() {
+        let workdir = state
+            .config
+            .data_dir
+            .join("sbx")
+            .join(&sandbox.id)
+            .join("work");
+        match state
+            .cells
+            .start(
+                sandbox.id.clone(),
+                &sand,
+                &workdir,
+                sandbox.mem_bytes,
+                sandbox.cpu,
+                sandbox.pids,
+            )
+            .await
+        {
+            Ok((sock, pid)) => {
+                sqlx::query(
+                    "UPDATE sandboxes SET state = 'running', sock = ?, pid = ? WHERE id = ?",
+                )
+                .bind(sock.to_string_lossy().as_ref())
+                .bind(pid)
+                .bind(&sandbox.id)
+                .execute(&state.db)
+                .await?;
+                sandbox.state = SandboxState::Running;
+            }
+            Err(err) => {
+                let _ = sqlx::query("DELETE FROM sandboxes WHERE id = ?")
+                    .bind(&sandbox.id)
+                    .execute(&state.db)
+                    .await;
+                return Err(err);
+            }
+        }
+    }
 
     Ok(Json(sandbox))
 }
@@ -191,6 +241,9 @@ pub async fn delete_sandbox(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
+    state.cells.shutdown(&id).await?;
+    let workdir = state.config.data_dir.join("sbx").join(&id);
+    let _ = tokio::fs::remove_dir_all(&workdir).await;
     let result = sqlx::query("DELETE FROM sandboxes WHERE id = ?")
         .bind(&id)
         .execute(&state.db)
@@ -206,19 +259,45 @@ pub async fn exec_sandbox(
     Path(id): Path<String>,
     Json(body): Json<ExecRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let exists: Option<String> = sqlx::query_scalar("SELECT id FROM sandboxes WHERE id = ?")
-        .bind(&id)
-        .fetch_optional(&state.db)
-        .await?;
-    if exists.is_none() {
-        return Err(Error::NotFound(format!("sandbox {id}")));
-    }
     if body.argv.is_empty() {
         return Err(Error::BadRequest("argv must not be empty".into()));
     }
-    let _ = body.stdin;
-    let _ = body.timeout_ms;
-    Err(Error::NotImplemented(
-        "exec requires a Linux cell node running agentcell".into(),
-    ))
+    let row_state: Option<String> = sqlx::query_scalar("SELECT state FROM sandboxes WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&state.db)
+        .await?;
+    let Some(row_state) = row_state else {
+        return Err(Error::NotFound(format!("sandbox {id}")));
+    };
+
+    if let Some(sock) = state.cells.sock(&id).await {
+        let stdin = body.stdin.unwrap_or_default();
+        let timeout_ms = body.timeout_ms.unwrap_or(30_000);
+        let (out, code) = cell::exec(
+            &sock,
+            &body.argv,
+            stdin.as_bytes(),
+            std::time::Duration::from_millis(timeout_ms),
+        )
+        .await?;
+        return Ok(Json(serde_json::json!({
+            "stdout": String::from_utf8_lossy(&out),
+            "code": code,
+        })));
+    }
+
+    match row_state.as_str() {
+        "pending" => Err(Error::NotImplemented(
+            "exec requires CLOUDCELL_SAND pointing at a sand binary".into(),
+        )),
+        "stopped" => Err(Error::Conflict(
+            "sandbox is stopped; create a new one".into(),
+        )),
+        "running" => Err(Error::NotImplemented(
+            "cell process was lost after restart; create a new sandbox".into(),
+        )),
+        other => Err(Error::Internal(anyhow::anyhow!(
+            "invalid sandbox state: {other}"
+        ))),
+    }
 }

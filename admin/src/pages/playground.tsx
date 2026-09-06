@@ -31,10 +31,15 @@ export default function PlaygroundPage() {
     setRunning(true)
     setOutput("")
     try {
-      await api(`/api/v1/sandboxes/${sandboxId}/exec`, {
-        method: "POST",
-        body: JSON.stringify({ argv: ["bash", "-c", command] }),
-      })
+      const result = await api<{ stdout: string; code: number }>(
+        `/api/v1/sandboxes/${sandboxId}/exec`,
+        {
+          method: "POST",
+          body: JSON.stringify({ argv: ["bash", "-c", command] }),
+        },
+      )
+      const trailer = result.code === 0 ? "" : `\n[exit ${result.code}]`
+      setOutput(`${result.stdout}${trailer}`)
     } catch (err) {
       const message = err instanceof ApiError || err instanceof Error ? err.message : "exec failed"
       setOutput(message)
@@ -77,7 +82,11 @@ export default function PlaygroundPage() {
               </Button>
             </div>
             <pre className="min-h-0 flex-1 overflow-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">
-              {output || t("playground.hint", "Exec is not wired to AgentCell yet.")}
+              {output ||
+                t(
+                  "playground.hint",
+                  "Run a command. Needs a running cell (CLOUDCELL_SAND) or returns 501.",
+                )}
             </pre>
           </Card>
         </div>

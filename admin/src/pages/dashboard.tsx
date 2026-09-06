@@ -93,11 +93,11 @@ export default function DashboardPage() {
                 <CardContent className="grid min-h-0 flex-1 grid-cols-2 content-start gap-2 px-5 pb-5">
                   <MetricTile
                     label={t("dashboard.exec", "Exec")}
-                    value={t("dashboard.execPending", "Not wired")}
+                    value={t("dashboard.execHint", "sand serve")}
                   />
                   <MetricTile
                     label={t("dashboard.agentcell", "AgentCell")}
-                    value={t("dashboard.agentcellPending", "GCP node")}
+                    value={t("dashboard.agentcellHint", "CLOUDCELL_SAND")}
                   />
                 </CardContent>
               </Card>

@@ -1,0 +1,2 @@
+ALTER TABLE sandboxes ADD COLUMN sock TEXT;
+ALTER TABLE sandboxes ADD COLUMN pid INTEGER;

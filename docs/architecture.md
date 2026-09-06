@@ -19,7 +19,7 @@ SDK      →  https://api.cloudcell.dev      Cloudflare Tunnel → GCP VM :8080
 | --- | --- | --- | --- |
 | Console | Vite / Pages | none | Cloudflare |
 | Control plane | `cloudcell` binary | unprivileged | GCP VM |
-| Cell runtime | `sand serve` | unprivileged | same or future nodes |
+| Cell runtime | `sand serve` (subprocess of this API when `CLOUDCELL_SAND` is set) | unprivileged | same or future nodes |
 | Kernel policy | `agentlsm` | root, one per node | cell node |
 
 The control plane **must not** link `libagentcell` / the `agentcell` crate to spawn jails. That ABI is one-shot, not thread-safe, and caps 16 live cells per process. Long-lived sandboxes are `sand serve` subprocesses driven over the unix-socket exec protocol.

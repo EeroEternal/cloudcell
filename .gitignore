@@ -1,6 +1,7 @@
 /target
 cloudcell.db
 cloudcell.db-*
+/data/
 **/*.rs.bk
 *.orig
 .DS_Store

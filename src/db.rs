@@ -28,5 +28,12 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool> {
         .await
         .map_err(|e| Error::Internal(anyhow::anyhow!("migration failed: {e}")))?;
 
+    // Cells are subprocesses of this API. A restart cannot recover them.
+    sqlx::query(
+        "UPDATE sandboxes SET state = 'stopped', sock = NULL, pid = NULL WHERE state = 'running'",
+    )
+    .execute(&pool)
+    .await?;
+
     Ok(pool)
 }

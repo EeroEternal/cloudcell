@@ -24,6 +24,9 @@ pub enum Error {
     #[error("Not found: {0}")]
     NotFound(String),
 
+    #[error("{0}")]
+    Conflict(String),
+
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 
@@ -35,6 +38,7 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             Error::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
+            Error::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
             Error::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             Error::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             Error::NotImplemented(msg) => (StatusCode::NOT_IMPLEMENTED, msg.clone()),

@@ -1,5 +1,6 @@
 pub mod api_key;
 pub mod auth;
+pub mod cell;
 pub mod config;
 pub mod db;
 pub mod error;
