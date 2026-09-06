@@ -1,0 +1,11 @@
+/target
+**/*.rs.bk
+*.orig
+.DS_Store
+.env
+.env.*
+!.env.example
+dist/
+node_modules/
+admin/dist/
+*.local

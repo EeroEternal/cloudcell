@@ -1,0 +1,13 @@
+# Copy to /etc/cloudflared/config.yml after creating the tunnel.
+#   cloudflared tunnel create cloudcell-api
+#   cloudflared tunnel route dns cloudcell-api api.cloudcell.dev
+#
+# The tunnel hostname is the only public ingress. Do not open :80/:443 on the VM.
+
+tunnel: REPLACE_TUNNEL_ID
+credentials-file: /etc/cloudflared/REPLACE_TUNNEL_ID.json
+
+ingress:
+  - hostname: api.cloudcell.dev
+    service: http://127.0.0.1:8080
+  - service: http_status:404

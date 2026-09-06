@@ -1,0 +1,25 @@
+[Unit]
+Description=cloudcell control plane
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cloudcell
+Group=cloudcell
+EnvironmentFile=/etc/cloudcell/env
+WorkingDirectory=/var/lib/cloudcell
+ExecStart=/usr/local/bin/cloudcell
+Restart=on-failure
+RestartSec=2
+LimitNOFILE=65535
+
+# Isolation stays in agentcell on this host; the API itself is unprivileged.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cloudcell
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
