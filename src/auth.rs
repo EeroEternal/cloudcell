@@ -39,6 +39,8 @@ fn is_public(method: &Method, path: &str) -> bool {
             | (&Method::GET, "/api/v1/auth/status")
             | (&Method::POST, "/api/v1/auth/register")
             | (&Method::POST, "/api/v1/auth/login")
+            | (&Method::POST, "/api/v1/auth/send-code")
+            | (&Method::POST, "/api/v1/auth/verify-code")
     )
 }
 

@@ -11,8 +11,21 @@ const MIN_PASSWORD_LEN: usize = 8;
 const SESSION_DAYS: i64 = 30;
 
 #[derive(Debug, Deserialize)]
+pub struct EmailBody {
+    pub email: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifyCodeRequest {
+    pub email: String,
+    pub code: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
     pub email: String,
+    pub code: String,
+    pub username: Option<String>,
     pub password: String,
 }
 
@@ -149,6 +162,77 @@ pub async fn session_valid(state: &AppState, token: &str) -> Result<bool> {
     Ok(lookup_session_email(state, token).await?.is_some())
 }
 
+fn six_digit_code() -> String {
+    format!("{:06}", Uuid::new_v4().as_u128() % 1_000_000)
+}
+
+pub async fn send_code(
+    State(state): State<AppState>,
+    Json(body): Json<EmailBody>,
+) -> Result<Json<serde_json::Value>> {
+    let email = normalize_email(&body.email)?;
+    let users = user_count(&state).await?;
+    if users > 0 && !registration_enabled(&state).await? {
+        return Err(Error::Forbidden("registration is disabled".into()));
+    }
+    let exists: Option<String> = sqlx::query_scalar("SELECT id FROM users WHERE email = ?")
+        .bind(&email)
+        .fetch_optional(&state.db)
+        .await?;
+    if exists.is_some() {
+        return Err(Error::Conflict("email already registered".into()));
+    }
+    let code = six_digit_code();
+    let expires = (Utc::now() + Duration::minutes(10)).to_rfc3339();
+    sqlx::query(
+        "INSERT INTO email_codes (email, code_hash, expires_at, verified)
+         VALUES (?, ?, ?, 0)
+         ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash,
+           expires_at = excluded.expires_at, verified = 0",
+    )
+    .bind(&email)
+    .bind(hash_key(&code))
+    .bind(&expires)
+    .execute(&state.db)
+    .await?;
+    state.mailer.send_verification_code(&email, &code).await?;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+pub async fn verify_code(
+    State(state): State<AppState>,
+    Json(body): Json<VerifyCodeRequest>,
+) -> Result<Json<serde_json::Value>> {
+    let email = normalize_email(&body.email)?;
+    let code = body.code.trim();
+    if code.len() != 6 {
+        return Err(Error::BadRequest("invalid verification code".into()));
+    }
+    let now = Utc::now().to_rfc3339();
+    let row: Option<(String, i64)> = sqlx::query_as(
+        "SELECT code_hash, verified FROM email_codes WHERE email = ? AND expires_at > ?",
+    )
+    .bind(&email)
+    .bind(&now)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((code_hash, _)) = row else {
+        return Err(Error::BadRequest(
+            "invalid or expired verification code".into(),
+        ));
+    };
+    if code_hash != hash_key(code) {
+        return Err(Error::BadRequest(
+            "invalid or expired verification code".into(),
+        ));
+    }
+    sqlx::query("UPDATE email_codes SET verified = 1 WHERE email = ?")
+        .bind(&email)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
 pub async fn register(
     State(state): State<AppState>,
     Json(body): Json<RegisterRequest>,
@@ -163,9 +247,33 @@ pub async fn register(
     if users > 0 && !registration_enabled(&state).await? {
         return Err(Error::Forbidden("registration is disabled".into()));
     }
-    let username = email.clone();
-    let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
+    let verified: Option<i64> =
+        sqlx::query_scalar("SELECT verified FROM email_codes WHERE email = ? AND expires_at > ?")
+            .bind(&email)
+            .bind(&now)
+            .fetch_optional(&state.db)
+            .await?;
+    if verified != Some(1) {
+        return Err(Error::BadRequest("email is not verified".into()));
+    }
+    let code = body.code.trim();
+    let stored_hash: Option<String> =
+        sqlx::query_scalar("SELECT code_hash FROM email_codes WHERE email = ?")
+            .bind(&email)
+            .fetch_optional(&state.db)
+            .await?;
+    if stored_hash.as_deref() != Some(&hash_key(code)) {
+        return Err(Error::BadRequest("invalid verification code".into()));
+    }
+    let username = body
+        .username
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| email.clone());
+    let id = Uuid::new_v4().to_string();
     let password_hash = hash_password(&body.password)?;
     let inserted = sqlx::query(
         "INSERT OR IGNORE INTO users (id, email, username, password_hash, created_at)
@@ -181,6 +289,10 @@ pub async fn register(
     if inserted.rows_affected() == 0 {
         return Err(Error::Conflict("email already registered".into()));
     }
+    sqlx::query("DELETE FROM email_codes WHERE email = ?")
+        .bind(&email)
+        .execute(&state.db)
+        .await?;
     let token = insert_session(&state, &id).await?;
     Ok(Json(AuthResponse { token, email }))
 }

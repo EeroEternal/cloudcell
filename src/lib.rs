@@ -5,6 +5,7 @@ pub mod cell;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod mail;
 pub mod sandbox;
 pub mod server;
 pub mod snapshot;

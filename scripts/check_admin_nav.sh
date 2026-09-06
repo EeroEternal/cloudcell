@@ -40,6 +40,7 @@ fi
 
 while IFS= read -r path; do
   [[ -z "$path" || "$path" == "*" ]] && continue
+  [[ "$path" == "login" || "$path" == "register" ]] && continue
   if ! grep -qx "/$path" <<<"$hrefs"; then
     echo "✗ <Route path=\"$path\"> has no nav href /$path"
     fail=1

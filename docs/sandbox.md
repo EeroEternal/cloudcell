@@ -16,7 +16,7 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 | DELETE | `/api/v1/keys/{id}` | Immediate invalidate |
 | POST | `/api/v1/keys/{id}/rotate` | New plaintext once; old hash dropped |
 
-Auth: session (`cc_sess_…` from `POST /api/v1/auth/register` or `/login`) or API key (`cc_live_…`). Public: `/health`, `/api/v1/ping`, `/api/v1/auth/status`, register, login. First account may register while `users` is empty; later signups follow Settings `registration_enabled`.
+Auth: session (`cc_sess_…`) or API key (`cc_live_…`). Register is email → `POST /api/v1/auth/send-code` → `verify-code` → `register` (username + password). Login is email + password. Mail: `CF_EMAIL_*` or `MAIL_*`; otherwise the code is logged (dev). Public: `/health`, `/api/v1/ping`, `/api/v1/auth/status`, send-code, verify-code, register, login.
 
 Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`, `--net none`. Unknown snapshot → 400.
 

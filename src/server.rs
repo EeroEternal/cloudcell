@@ -35,6 +35,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/auth/status", get(account::status))
         .route("/api/v1/auth/register", post(account::register))
         .route("/api/v1/auth/login", post(account::login))
+        .route("/api/v1/auth/send-code", post(account::send_code))
+        .route("/api/v1/auth/verify-code", post(account::verify_code))
         .route("/api/v1/auth/logout", post(account::logout))
         .route(
             "/api/v1/settings",

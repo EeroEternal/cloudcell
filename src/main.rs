@@ -1,4 +1,5 @@
 use cloudcell::db;
+use cloudcell::mail::Mailer;
 use cloudcell::{config::Config, error::Result, server, state::AppState};
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -23,7 +24,8 @@ async fn main() -> Result<()> {
     );
 
     let db = db::connect(&config.database_url).await?;
-    let app = server::create_router(AppState::new(config, db));
+    let state = AppState::new(config, db).with_mailer(Mailer::from_env());
+    let app = server::create_router(state);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to bind to {addr}: {e}"))?;

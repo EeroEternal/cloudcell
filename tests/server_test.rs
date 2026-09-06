@@ -4,16 +4,23 @@ use axum::{
 };
 use cloudcell::config::Config;
 use cloudcell::db;
+use cloudcell::mail::Mailer;
 use cloudcell::server::create_router;
 use cloudcell::state::AppState;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-async fn app() -> axum::Router {
+async fn harness() -> (axum::Router, Mailer) {
     let pool = db::connect("sqlite::memory:")
         .await
         .expect("connect in-memory sqlite");
-    create_router(AppState::new(Config::default(), pool))
+    let mailer = Mailer::log();
+    let state = AppState::new(Config::default(), pool).with_mailer(mailer.clone());
+    (create_router(state), mailer)
+}
+
+async fn app() -> axum::Router {
+    harness().await.0
 }
 
 async fn json_body(response: axum::http::Response<Body>) -> serde_json::Value {
@@ -21,7 +28,47 @@ async fn json_body(response: axum::http::Response<Body>) -> serde_json::Value {
     serde_json::from_slice(&body).unwrap()
 }
 
-async fn register_session(app: &axum::Router) -> String {
+fn last_code(mailer: &Mailer) -> String {
+    mailer
+        .last_code
+        .lock()
+        .unwrap()
+        .as_ref()
+        .expect("code sent")
+        .1
+        .clone()
+}
+
+async fn register_session(app: &axum::Router, mailer: &Mailer) -> String {
+    let send = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/send-code")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"email":"ci@cloudcell.dev"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(send.status(), StatusCode::OK);
+    let code = last_code(mailer);
+    let verify = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/verify-code")
+                .header("content-type", "application/json")
+                .body(Body::from(format!(
+                    r#"{{"email":"ci@cloudcell.dev","code":"{code}"}}"#
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(verify.status(), StatusCode::OK);
     let created = app
         .clone()
         .oneshot(
@@ -29,9 +76,9 @@ async fn register_session(app: &axum::Router) -> String {
                 .method("POST")
                 .uri("/api/v1/auth/register")
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    r#"{"email":"ci@cloudcell.dev","password":"password1"}"#,
-                ))
+                .body(Body::from(format!(
+                    r#"{{"email":"ci@cloudcell.dev","code":"{code}","username":"ci","password":"password1"}}"#
+                )))
                 .unwrap(),
         )
         .await
@@ -100,8 +147,8 @@ async fn test_sandbox_requires_auth() {
 
 #[tokio::test]
 async fn test_sandbox_lifecycle_and_exec_not_implemented() {
-    let app = app().await;
-    let key = register_session(&app).await;
+    let (app, mailer) = harness().await;
+    let key = register_session(&app, &mailer).await;
 
     let created = app
         .clone()
@@ -155,8 +202,8 @@ async fn test_sandbox_lifecycle_and_exec_not_implemented() {
 
 #[tokio::test]
 async fn test_register_login_and_api_key() {
-    let app = app().await;
-    let session = register_session(&app).await;
+    let (app, mailer) = harness().await;
+    let session = register_session(&app, &mailer).await;
     assert!(session.starts_with("cc_sess_"));
 
     let unauth = app
@@ -202,8 +249,8 @@ async fn test_register_login_and_api_key() {
 
 #[tokio::test]
 async fn test_registration_can_be_disabled() {
-    let app = app().await;
-    let session = register_session(&app).await;
+    let (app, mailer) = harness().await;
+    let session = register_session(&app, &mailer).await;
     let disabled = app
         .clone()
         .oneshot(json_req(
@@ -220,11 +267,9 @@ async fn test_registration_can_be_disabled() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/auth/register")
+                .uri("/api/v1/auth/send-code")
                 .header("content-type", "application/json")
-                .body(Body::from(
-                    r#"{"email":"two@cloudcell.dev","password":"password1"}"#,
-                ))
+                .body(Body::from(r#"{"email":"two@cloudcell.dev"}"#))
                 .unwrap(),
         )
         .await
@@ -234,7 +279,7 @@ async fn test_registration_can_be_disabled() {
 
 #[tokio::test]
 async fn test_snapshot_catalog_requires_auth() {
-    let app = app().await;
+    let (app, mailer) = harness().await;
     let denied = app
         .clone()
         .oneshot(
@@ -247,7 +292,7 @@ async fn test_snapshot_catalog_requires_auth() {
         .unwrap();
     assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
 
-    let key = register_session(&app).await;
+    let key = register_session(&app, &mailer).await;
     let response = app
         .oneshot(get_req("/api/v1/snapshots", &key))
         .await
@@ -273,8 +318,9 @@ async fn test_sqlite_persists_across_pools() {
 
     {
         let pool = db::connect(&url).await.unwrap();
-        let app = create_router(AppState::new(Config::default(), pool));
-        key = register_session(&app).await;
+        let mailer = Mailer::log();
+        let app = create_router(AppState::new(Config::default(), pool).with_mailer(mailer.clone()));
+        key = register_session(&app, &mailer).await;
         let created = app
             .oneshot(json_req(
                 "POST",
