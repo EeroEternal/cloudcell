@@ -21,21 +21,23 @@ async fn json_body(response: axum::http::Response<Body>) -> serde_json::Value {
     serde_json::from_slice(&body).unwrap()
 }
 
-async fn bootstrap_key(app: &axum::Router) -> String {
+async fn register_session(app: &axum::Router) -> String {
     let created = app
         .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/keys")
+                .uri("/api/v1/auth/register")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"name":"ci"}"#))
+                .body(Body::from(
+                    r#"{"email":"ci@cloudcell.dev","password":"password1"}"#,
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(created.status(), StatusCode::OK);
-    json_body(created).await["key"]
+    json_body(created).await["token"]
         .as_str()
         .unwrap()
         .to_string()
@@ -99,7 +101,7 @@ async fn test_sandbox_requires_auth() {
 #[tokio::test]
 async fn test_sandbox_lifecycle_and_exec_not_implemented() {
     let app = app().await;
-    let key = bootstrap_key(&app).await;
+    let key = register_session(&app).await;
 
     let created = app
         .clone()
@@ -152,9 +154,12 @@ async fn test_sandbox_lifecycle_and_exec_not_implemented() {
 }
 
 #[tokio::test]
-async fn test_api_key_bootstrap_then_auth() {
+async fn test_register_login_and_api_key() {
     let app = app().await;
-    let created = app
+    let session = register_session(&app).await;
+    assert!(session.starts_with("cc_sess_"));
+
+    let unauth = app
         .clone()
         .oneshot(
             Request::builder()
@@ -166,33 +171,65 @@ async fn test_api_key_bootstrap_then_auth() {
         )
         .await
         .unwrap();
+    assert_eq!(unauth.status(), StatusCode::UNAUTHORIZED);
+
+    let created = app
+        .clone()
+        .oneshot(json_req(
+            "POST",
+            "/api/v1/keys",
+            &session,
+            r#"{"name":"ci"}"#,
+        ))
+        .await
+        .unwrap();
     assert_eq!(created.status(), StatusCode::OK);
     let created_json = json_body(created).await;
-    let key = created_json["key"].as_str().unwrap();
-    assert!(key.starts_with("cc_live_"));
+    assert!(
+        created_json["key"]
+            .as_str()
+            .unwrap()
+            .starts_with("cc_live_")
+    );
+
+    let listed = app
+        .oneshot(get_req("/api/v1/keys", &session))
+        .await
+        .unwrap();
+    let listed_json = json_body(listed).await;
+    assert!(listed_json[0]["key"].is_null());
+}
+
+#[tokio::test]
+async fn test_registration_can_be_disabled() {
+    let app = app().await;
+    let session = register_session(&app).await;
+    let disabled = app
+        .clone()
+        .oneshot(json_req(
+            "PUT",
+            "/api/v1/settings",
+            &session,
+            r#"{"registration_enabled":false}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(disabled.status(), StatusCode::OK);
 
     let second = app
-        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/keys")
+                .uri("/api/v1/auth/register")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"name":"other"}"#))
+                .body(Body::from(
+                    r#"{"email":"two@cloudcell.dev","password":"password1"}"#,
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(second.status(), StatusCode::UNAUTHORIZED);
-
-    let listed = app.oneshot(get_req("/api/v1/keys", key)).await.unwrap();
-    let listed_json = json_body(listed).await;
-    assert!(listed_json[0]["key"].is_null());
-    assert!(listed_json[0]["hint"].as_str().unwrap().contains("••••"));
-    assert_ne!(
-        listed_json[0]["hint"].as_str().unwrap(),
-        created_json["key"].as_str().unwrap()
-    );
+    assert_eq!(second.status(), StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -210,7 +247,7 @@ async fn test_snapshot_catalog_requires_auth() {
         .unwrap();
     assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
 
-    let key = bootstrap_key(&app).await;
+    let key = register_session(&app).await;
     let response = app
         .oneshot(get_req("/api/v1/snapshots", &key))
         .await
@@ -237,7 +274,7 @@ async fn test_sqlite_persists_across_pools() {
     {
         let pool = db::connect(&url).await.unwrap();
         let app = create_router(AppState::new(Config::default(), pool));
-        key = bootstrap_key(&app).await;
+        key = register_session(&app).await;
         let created = app
             .oneshot(json_req(
                 "POST",
