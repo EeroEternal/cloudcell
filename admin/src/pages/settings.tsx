@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Globe, Sliders, RotateCcw, ShieldCheck, Shield, KeyRound } from "lucide-react"
 import { SectionCard } from "@/common/section-card"
 import { PageContainer } from "@/components/layout/page-container"
@@ -7,7 +7,7 @@ import { PageShell } from "@/components/layout/page-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getApiKey, setApiKey } from "@/lib/api"
+import { api, getApiKey, setApiKey } from "@/lib/api"
 import { t } from "@/lib/i18n"
 import { toast } from "sonner"
 import { SettingsSectionNav, type SettingsSection } from "@/components/settings/SettingsSectionNav"
@@ -42,6 +42,16 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
+  useEffect(() => {
+    api<{ registration_enabled: boolean }>("/api/v1/settings")
+      .then((settings) => {
+        const next = { ...INITIAL_CONFIG, registrationEnabled: settings.registration_enabled }
+        setConfig(next)
+        setDraftConfig(next)
+      })
+      .catch(() => {})
+  }, [])
+
   const handleStartEdit = () => {
     setDraftConfig(config)
     setIsEditing(true)
@@ -56,13 +66,20 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     setSaving(true)
-    setTimeout(() => {
-      setConfig(draftConfig)
-      setSaving(false)
-      setIsEditing(false)
-      setSaveMessage({ type: "success", text: "Settings saved successfully." })
-      setTimeout(() => setSaveMessage(null), 3000)
-    }, 400)
+    api("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify({ registration_enabled: draftConfig.registrationEnabled }),
+    })
+      .then(() => {
+        setConfig(draftConfig)
+        setIsEditing(false)
+        setSaveMessage({ type: "success", text: t("settings.saved", "Settings saved.") })
+        setTimeout(() => setSaveMessage(null), 3000)
+      })
+      .catch((err: Error) => {
+        setSaveMessage({ type: "error", text: err.message })
+      })
+      .finally(() => setSaving(false))
   }
 
   const handleSectionChange = (sectionId: string) => {

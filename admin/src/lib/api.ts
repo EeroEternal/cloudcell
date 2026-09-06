@@ -1,5 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? ""
 const API_KEY_STORAGE = "cloudcell.api_key"
+const SESSION_STORAGE = "cloudcell.session"
 
 export class ApiError extends Error {
   status: number
@@ -19,14 +20,39 @@ export function setApiKey(key: string | null): void {
   else sessionStorage.removeItem(API_KEY_STORAGE)
 }
 
+export function getSession(): string {
+  return sessionStorage.getItem(SESSION_STORAGE) ?? ""
+}
+
+export function setSession(token: string | null): void {
+  if (token) sessionStorage.setItem(SESSION_STORAGE, token)
+  else sessionStorage.removeItem(SESSION_STORAGE)
+}
+
+export function authToken(): string {
+  return getSession() || getApiKey()
+}
+
+export type AuthStatus = {
+  registration_enabled: boolean
+  has_users: boolean
+  authenticated: boolean
+  email: string | null
+}
+
+export type AuthResponse = {
+  token: string
+  email: string
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (init?.body && !headers.has("content-type")) {
     headers.set("content-type", "application/json")
   }
-  const key = getApiKey()
-  if (key && !headers.has("authorization")) {
-    headers.set("authorization", `Bearer ${key}`)
+  const token = authToken()
+  if (token && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${token}`)
   }
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
   const text = await response.text()

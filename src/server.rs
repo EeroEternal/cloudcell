@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
+use crate::account;
 use crate::api_key;
 use crate::auth;
 use crate::config::Config;
@@ -31,6 +32,14 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/v1/sandboxes/{id}/exec", post(sandbox::exec_sandbox))
         .route("/api/v1/snapshots", get(snapshot::list_snapshots))
+        .route("/api/v1/auth/status", get(account::status))
+        .route("/api/v1/auth/register", post(account::register))
+        .route("/api/v1/auth/login", post(account::login))
+        .route("/api/v1/auth/logout", post(account::logout))
+        .route(
+            "/api/v1/settings",
+            get(account::get_settings).put(account::put_settings),
+        )
         .route(
             "/api/v1/keys",
             get(api_key::list_keys).post(api_key::create_key),

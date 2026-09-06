@@ -4,8 +4,8 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use sqlx::SqlitePool;
 
+use crate::account;
 use crate::api_key::hash_key;
 use crate::error::Error;
 use crate::state::AppState;
@@ -16,27 +16,30 @@ pub async fn require_api_key(
     next: Next,
 ) -> Response {
     let path = request.uri().path();
-    if path == "/health" || path == "/api/v1/ping" {
+    if is_public(request.method(), path) {
         return next.run(request).await;
-    }
-
-    if request.method() == Method::POST && path == "/api/v1/keys" {
-        match count_keys(&state.db).await {
-            Ok(0) => return next.run(request).await,
-            Ok(_) => {}
-            Err(err) => return err.into_response(),
-        }
     }
 
     let Some(token) = bearer_token(request.headers()) else {
         return Error::Unauthorized("missing bearer token".into()).into_response();
     };
 
-    match lookup_key(&state.db, token).await {
+    match is_authorized(&state, token).await {
         Ok(true) => next.run(request).await,
         Ok(false) => Error::Unauthorized("invalid bearer token".into()).into_response(),
         Err(err) => err.into_response(),
     }
+}
+
+fn is_public(method: &Method, path: &str) -> bool {
+    matches!(
+        (method, path),
+        (&Method::GET, "/health")
+            | (&Method::GET, "/api/v1/ping")
+            | (&Method::GET, "/api/v1/auth/status")
+            | (&Method::POST, "/api/v1/auth/register")
+            | (&Method::POST, "/api/v1/auth/login")
+    )
 }
 
 fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
@@ -48,18 +51,14 @@ fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
-async fn count_keys(db: &SqlitePool) -> crate::error::Result<i64> {
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM api_keys")
-        .fetch_one(db)
-        .await?;
-    Ok(count)
-}
-
-async fn lookup_key(db: &SqlitePool, token: &str) -> crate::error::Result<bool> {
+async fn is_authorized(state: &AppState, token: &str) -> crate::error::Result<bool> {
+    if token.starts_with("cc_sess_") {
+        return account::session_valid(state, token).await;
+    }
     let hash = hash_key(token);
     let found: Option<String> = sqlx::query_scalar("SELECT id FROM api_keys WHERE hash = ?")
         .bind(hash)
-        .fetch_optional(db)
+        .fetch_optional(&state.db)
         .await?;
     Ok(found.is_some())
 }

@@ -21,6 +21,9 @@ pub enum Error {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
+    #[error("{0}")]
+    Forbidden(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 
@@ -41,6 +44,7 @@ impl IntoResponse for Error {
             Error::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
             Error::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             Error::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
+            Error::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             Error::NotImplemented(msg) => (StatusCode::NOT_IMPLEMENTED, msg.clone()),
             Error::Database(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
             Error::Config(msg) => (StatusCode::BAD_REQUEST, msg.clone()),

@@ -16,7 +16,7 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 | DELETE | `/api/v1/keys/{id}` | Immediate invalidate |
 | POST | `/api/v1/keys/{id}/rotate` | New plaintext once; old hash dropped |
 
-Auth: `Authorization: Bearer cc_live_…` on every `/api/v1/*` route except `/api/v1/ping`. The first `POST /api/v1/keys` is allowed without a bearer while the `api_keys` table is empty (bootstrap). After that, missing/invalid tokens return 401.
+Auth: session (`cc_sess_…` from `POST /api/v1/auth/register` or `/login`) or API key (`cc_live_…`). Public: `/health`, `/api/v1/ping`, `/api/v1/auth/status`, register, login. First account may register while `users` is empty; later signups follow Settings `registration_enabled`.
 
 Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`, `--net none`. Unknown snapshot → 400.
 
