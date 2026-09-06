@@ -5,19 +5,20 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::state::AppState;
 
 /// Persisted key. The plaintext is never stored.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, FromRow)]
 pub struct ApiKeyRecord {
     pub id: String,
     pub name: String,
     pub prefix: String,
     pub hash: String,
-    pub created_at: DateTime<Utc>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -45,7 +46,7 @@ pub struct CreateApiKey {
     pub name: String,
 }
 
-fn hash_key(key: &str) -> String {
+pub(crate) fn hash_key(key: &str) -> String {
     let digest = Sha256::digest(key.as_bytes());
     digest.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -65,20 +66,32 @@ fn hint_for(prefix: &str) -> String {
     format!("{prefix}••••")
 }
 
-fn to_list_item(record: &ApiKeyRecord) -> ApiKeyListItem {
-    ApiKeyListItem {
-        id: record.id.clone(),
-        name: record.name.clone(),
+fn parse_created_at(value: &str) -> Result<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| Error::Internal(anyhow::anyhow!("invalid created_at: {e}")))
+}
+
+fn to_list_item(record: ApiKeyRecord) -> Result<ApiKeyListItem> {
+    Ok(ApiKeyListItem {
+        created_at: parse_created_at(&record.created_at)?,
+        id: record.id,
+        name: record.name,
         prefix: record.prefix.clone(),
         hint: hint_for(&record.prefix),
-        created_at: record.created_at,
-    }
+    })
 }
 
 pub async fn list_keys(State(state): State<AppState>) -> Result<Json<Vec<ApiKeyListItem>>> {
-    let guard = state.keys.lock().await;
-    let mut items: Vec<ApiKeyListItem> = guard.values().map(to_list_item).collect();
-    items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    let rows = sqlx::query_as::<_, ApiKeyRecord>(
+        "SELECT id, name, prefix, hash, created_at FROM api_keys ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
+    let items = rows
+        .into_iter()
+        .map(to_list_item)
+        .collect::<Result<Vec<_>>>()?;
     Ok(Json(items))
 }
 
@@ -97,7 +110,7 @@ pub async fn create_key(
         name: name.clone(),
         prefix: prefix.clone(),
         hash: hash_key(&key),
-        created_at: now,
+        created_at: now.to_rfc3339(),
     };
     let created = ApiKeyCreated {
         id: record.id.clone(),
@@ -108,7 +121,16 @@ pub async fn create_key(
         created_at: now,
     };
     debug_assert!(key_matches(&record, &created.key));
-    state.keys.lock().await.insert(record.id.clone(), record);
+
+    sqlx::query("INSERT INTO api_keys (id, name, prefix, hash, created_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(&record.id)
+        .bind(&record.name)
+        .bind(&record.prefix)
+        .bind(&record.hash)
+        .bind(&record.created_at)
+        .execute(&state.db)
+        .await?;
+
     Ok(Json(created))
 }
 
@@ -116,10 +138,13 @@ pub async fn delete_key(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
-    let mut guard = state.keys.lock().await;
-    guard
-        .remove(&id)
-        .ok_or_else(|| Error::NotFound(format!("api key {id}")))?;
+    let result = sqlx::query("DELETE FROM api_keys WHERE id = ?")
+        .bind(&id)
+        .execute(&state.db)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(Error::NotFound(format!("api key {id}")));
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -127,21 +152,35 @@ pub async fn rotate_key(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiKeyCreated>> {
-    let mut guard = state.keys.lock().await;
-    let record = guard
-        .get_mut(&id)
-        .ok_or_else(|| Error::NotFound(format!("api key {id}")))?;
+    let mut record = sqlx::query_as::<_, ApiKeyRecord>(
+        "SELECT id, name, prefix, hash, created_at FROM api_keys WHERE id = ?",
+    )
+    .bind(&id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| Error::NotFound(format!("api key {id}")))?;
+
     let (key, prefix) = mint_key();
+    let now = Utc::now();
     record.prefix = prefix.clone();
     record.hash = hash_key(&key);
-    record.created_at = Utc::now();
-    debug_assert!(key_matches(record, &key));
+    record.created_at = now.to_rfc3339();
+    debug_assert!(key_matches(&record, &key));
+
+    sqlx::query("UPDATE api_keys SET prefix = ?, hash = ?, created_at = ? WHERE id = ?")
+        .bind(&record.prefix)
+        .bind(&record.hash)
+        .bind(&record.created_at)
+        .bind(&record.id)
+        .execute(&state.db)
+        .await?;
+
     Ok(Json(ApiKeyCreated {
-        id: record.id.clone(),
-        name: record.name.clone(),
+        id: record.id,
+        name: record.name,
         prefix,
         hint: hint_for(&record.prefix),
         key,
-        created_at: record.created_at,
+        created_at: now,
     }))
 }

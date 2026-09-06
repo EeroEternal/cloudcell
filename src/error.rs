@@ -18,6 +18,9 @@ pub enum Error {
     #[error("{0}")]
     BadRequest(String),
 
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 
@@ -33,6 +36,7 @@ impl IntoResponse for Error {
         let (status, message) = match &self {
             Error::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             Error::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            Error::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             Error::NotImplemented(msg) => (StatusCode::NOT_IMPLEMENTED, msg.clone()),
             Error::Database(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
             Error::Config(msg) => (StatusCode::BAD_REQUEST, msg.clone()),

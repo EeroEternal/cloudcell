@@ -4,6 +4,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
@@ -31,6 +32,27 @@ pub enum SandboxState {
     Stopped,
 }
 
+impl SandboxState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Running => "running",
+            Self::Stopped => "stopped",
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "running" => Ok(Self::Running),
+            "stopped" => Ok(Self::Stopped),
+            other => Err(Error::Internal(anyhow::anyhow!(
+                "invalid sandbox state: {other}"
+            ))),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateSandbox {
     pub snapshot: Option<String>,
@@ -47,10 +69,53 @@ pub struct ExecRequest {
     pub timeout_ms: Option<u64>,
 }
 
+#[derive(FromRow)]
+struct SandboxRow {
+    id: String,
+    snapshot: String,
+    state: String,
+    cpu: f64,
+    mem_bytes: i64,
+    pids: i64,
+    egress_json: String,
+    created_at: String,
+}
+
+impl TryFrom<SandboxRow> for Sandbox {
+    type Error = Error;
+
+    fn try_from(row: SandboxRow) -> Result<Self> {
+        let created_at = DateTime::parse_from_rfc3339(&row.created_at)
+            .map_err(|e| Error::Internal(anyhow::anyhow!("invalid created_at: {e}")))?
+            .with_timezone(&Utc);
+        let egress: Vec<String> = serde_json::from_str(&row.egress_json)
+            .map_err(|e| Error::Internal(anyhow::anyhow!("invalid egress_json: {e}")))?;
+        Ok(Self {
+            id: row.id,
+            snapshot: row.snapshot,
+            state: SandboxState::parse(&row.state)?,
+            cpu: row.cpu,
+            mem_bytes: u64::try_from(row.mem_bytes)
+                .map_err(|_| Error::Internal(anyhow::anyhow!("negative mem_bytes")))?,
+            pids: u32::try_from(row.pids)
+                .map_err(|_| Error::Internal(anyhow::anyhow!("invalid pids")))?,
+            egress,
+            created_at,
+        })
+    }
+}
+
 pub async fn list_sandboxes(State(state): State<AppState>) -> Result<Json<Vec<Sandbox>>> {
-    let guard = state.sandboxes.lock().await;
-    let mut items: Vec<Sandbox> = guard.values().cloned().collect();
-    items.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    let rows = sqlx::query_as::<_, SandboxRow>(
+        "SELECT id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at
+         FROM sandboxes ORDER BY created_at DESC",
+    )
+    .fetch_all(&state.db)
+    .await?;
+    let items = rows
+        .into_iter()
+        .map(Sandbox::try_from)
+        .collect::<Result<Vec<_>>>()?;
     Ok(Json(items))
 }
 
@@ -85,12 +150,25 @@ pub async fn create_sandbox(
         egress: body.egress.unwrap_or_default(),
         created_at: Utc::now(),
     };
+    let egress_json =
+        serde_json::to_string(&sandbox.egress).map_err(|e| Error::Internal(anyhow::anyhow!(e)))?;
 
-    state
-        .sandboxes
-        .lock()
-        .await
-        .insert(sandbox.id.clone(), sandbox.clone());
+    sqlx::query(
+        "INSERT INTO sandboxes
+         (id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&sandbox.id)
+    .bind(&sandbox.snapshot)
+    .bind(sandbox.state.as_str())
+    .bind(sandbox.cpu)
+    .bind(i64::try_from(sandbox.mem_bytes).unwrap_or(i64::MAX))
+    .bind(i64::from(sandbox.pids))
+    .bind(&egress_json)
+    .bind(sandbox.created_at.to_rfc3339())
+    .execute(&state.db)
+    .await?;
+
     Ok(Json(sandbox))
 }
 
@@ -98,22 +176,28 @@ pub async fn get_sandbox(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Sandbox>> {
-    let guard = state.sandboxes.lock().await;
-    guard
-        .get(&id)
-        .cloned()
-        .map(Json)
-        .ok_or_else(|| Error::NotFound(format!("sandbox {id}")))
+    let row = sqlx::query_as::<_, SandboxRow>(
+        "SELECT id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at
+         FROM sandboxes WHERE id = ?",
+    )
+    .bind(&id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| Error::NotFound(format!("sandbox {id}")))?;
+    Ok(Json(Sandbox::try_from(row)?))
 }
 
 pub async fn delete_sandbox(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
-    let mut guard = state.sandboxes.lock().await;
-    guard
-        .remove(&id)
-        .ok_or_else(|| Error::NotFound(format!("sandbox {id}")))?;
+    let result = sqlx::query("DELETE FROM sandboxes WHERE id = ?")
+        .bind(&id)
+        .execute(&state.db)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(Error::NotFound(format!("sandbox {id}")));
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -122,8 +206,11 @@ pub async fn exec_sandbox(
     Path(id): Path<String>,
     Json(body): Json<ExecRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let exists = state.sandboxes.lock().await.contains_key(&id);
-    if !exists {
+    let exists: Option<String> = sqlx::query_scalar("SELECT id FROM sandboxes WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&state.db)
+        .await?;
+    if exists.is_none() {
         return Err(Error::NotFound(format!("sandbox {id}")));
     }
     if body.argv.is_empty() {

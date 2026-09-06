@@ -5,7 +5,7 @@ Sandbox-as-a-service control plane on [AgentCell](https://github.com/EeroEternal
 - Console: `https://cloudcell.dev` (Cloudflare Pages, `admin/`)
 - API: `https://api.cloudcell.dev` (GCP VM + Cloudflare Tunnel)
 
-Exec into a real jail is **not wired yet**. Create/list records and API keys work in-process; `POST /api/v1/sandboxes/{id}/exec` returns 501. See [`docs/sandbox.md`](docs/sandbox.md).
+Exec into a real jail is **not wired yet**. Sandboxes and API keys persist in SQLite; `POST /api/v1/sandboxes/{id}/exec` returns 501. First `POST /api/v1/keys` bootstraps auth. See [`docs/sandbox.md`](docs/sandbox.md).
 
 ## Quick start
 

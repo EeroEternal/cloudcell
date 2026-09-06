@@ -1,4 +1,6 @@
 /target
+cloudcell.db
+cloudcell.db-*
 **/*.rs.bk
 *.orig
 .DS_Store

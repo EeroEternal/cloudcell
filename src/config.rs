@@ -28,7 +28,10 @@ impl Default for Config {
 
 impl Config {
     pub fn from_env() -> Self {
-        let mut cfg = Self::default();
+        let mut cfg = Self {
+            database_url: "sqlite:cloudcell.db".to_string(),
+            ..Self::default()
+        };
         if let Ok(host) = std::env::var("CLOUDCELL_HOST") {
             cfg.host = host;
         }

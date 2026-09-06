@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { api, type ApiKeyCreated, type ApiKeyListItem } from "@/lib/api"
+import { api, setApiKey, type ApiKeyCreated, type ApiKeyListItem } from "@/lib/api"
 import { t } from "@/lib/i18n"
 
 export default function KeysPage() {
@@ -79,6 +79,7 @@ export default function KeysPage() {
       })
       setCreateOpen(false)
       setName("")
+      setApiKey(created.key)
       setRevealed(created)
       await load()
     } catch (err) {
@@ -95,6 +96,7 @@ export default function KeysPage() {
         method: "POST",
       })
       setRotateId(null)
+      setApiKey(created.key)
       setRevealed(created)
       await load()
     } catch (err) {

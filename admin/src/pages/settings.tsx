@@ -7,6 +7,9 @@ import { PageShell } from "@/components/layout/page-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { getApiKey, setApiKey } from "@/lib/api"
+import { t } from "@/lib/i18n"
+import { toast } from "sonner"
 import { SettingsSectionNav, type SettingsSection } from "@/components/settings/SettingsSectionNav"
 import { SettingsToggleRow } from "@/components/settings/SettingsToggleRow"
 import { SettingsSaveBar } from "@/components/settings/SettingsSaveBar"
@@ -215,13 +218,7 @@ export default function SettingsPage() {
               </SectionCard>
             )}
 
-            {activeSection === "api-tokens" && (
-              <SectionCard title="Service Credentials" description="Long-lived service tokens for automated integrations and background daemons.">
-                <p className="text-xs text-muted-foreground">
-                  Follow single-reveal and irreversible hash lifecycle rules for all machine tokens.
-                </p>
-              </SectionCard>
-            )}
+            {activeSection === "api-tokens" && <ConsoleKeySection />}
 
             {isEditing && (
               <SettingsSaveBar
@@ -235,5 +232,46 @@ export default function SettingsPage() {
         </div>
       </PageContainer>
     </PageShell>
+  )
+}
+
+function ConsoleKeySection() {
+  const [draft, setDraft] = useState(getApiKey)
+
+  const save = () => {
+    const next = draft.trim()
+    setApiKey(next || null)
+    setDraft(next)
+    toast.success(
+      next
+        ? t("settings.keySaved", "API key stored for this tab")
+        : t("settings.keyCleared", "API key cleared"),
+    )
+  }
+
+  return (
+    <SectionCard title={t("settings.consoleKey", "Console API key")}>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "settings.consoleKeyHelp",
+            "Paste the plaintext key shown once at create/rotate. It stays in this browser tab only.",
+          )}
+        </p>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="console-api-key">{t("settings.consoleKey", "Console API key")}</Label>
+          <Input
+            id="console-api-key"
+            type="password"
+            autoComplete="off"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        </div>
+        <div>
+          <Button onClick={save}>{t("settings.saveKey", "Save")}</Button>
+        </div>
+      </div>
+    </SectionCard>
   )
 }

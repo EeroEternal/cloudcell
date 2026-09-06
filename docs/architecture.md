@@ -27,8 +27,8 @@ The control plane **must not** link `libagentcell` / the `agentcell` crate to sp
 ## 2. Layering & Invocation Rules
 
 1. **Transport (`src/server.rs`)**: route mounting, CORS, trace. No database queries, no jail lifecycle.
-2. **Domain (`src/sandbox.rs`, `src/api_key.rs`, `src/snapshot.rs`)**: entities and state transitions. In-memory until sqlite migrations land.
-3. **Storage**: `sqlx` + `migrations/NNN_*.sql` when persistence is added. Do not ad-hoc `std::fs` schemas.
+2. **Domain (`src/sandbox.rs`, `src/api_key.rs`, `src/snapshot.rs`)**: entities and state transitions.
+3. **Storage**: `sqlx` + `migrations/NNN_*.sql` (see `src/db.rs`). Do not ad-hoc `std::fs` schemas.
 4. **Cell agent (not in this crate yet)**: owns `sand`, cgroup accounting, and audit tails.
 
 ## 3. Plugin-First Principle

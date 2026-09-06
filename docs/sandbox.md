@@ -6,9 +6,9 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/health` | `{ status: ok, service: cloudcell }` |
-| GET | `/api/v1/ping` | `{ message: pong }` |
-| GET/POST | `/api/v1/sandboxes` | In-memory records. Create state is **`pending`**. |
+| GET | `/health` | `{ status: ok, service: cloudcell }` (no auth) |
+| GET | `/api/v1/ping` | `{ message: pong }` (no auth) |
+| GET/POST | `/api/v1/sandboxes` | SQLite records. Create state is **`pending`**. |
 | GET/DELETE | `/api/v1/sandboxes/{id}` | Record lookup / delete |
 | POST | `/api/v1/sandboxes/{id}/exec` | **501** until a Linux cell node runs agentcell |
 | GET | `/api/v1/snapshots` | Static catalog (`base`, `python-3.12`, `node-22`), status **`declared`** |
@@ -16,15 +16,18 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 | DELETE | `/api/v1/keys/{id}` | Immediate invalidate |
 | POST | `/api/v1/keys/{id}/rotate` | New plaintext once; old hash dropped |
 
+Auth: `Authorization: Bearer cc_live_…` on every `/api/v1/*` route except `/api/v1/ping`. The first `POST /api/v1/keys` is allowed without a bearer while the `api_keys` table is empty (bootstrap). After that, missing/invalid tokens return 401.
+
 Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`. Unknown snapshot → 400.
+
+Local default DB is `sqlite:cloudcell.db`. Production: `CLOUDCELL_DATABASE_URL`.
 
 ## Not implemented
 
 - Starting `sand serve`, unix-socket exec, PTY, file upload, preview URLs
 - Packing snapshot erofs / pulling OCI
 - `agentlsm` audit stream
-- sqlite persistence (records die with the process)
-- Authn on the HTTP API (keys are stored, not yet required on requests)
+- Org/project tenancy (one SQLite, all keys share one sandbox table)
 
 ## Invariants for the agent milestone
 

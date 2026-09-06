@@ -1,6 +1,7 @@
 use axum::{
     Json, Router,
     http::{HeaderValue, Method, header},
+    middleware,
     routing::{get, post},
 };
 use serde_json::{Value, json};
@@ -8,6 +9,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::api_key;
+use crate::auth;
 use crate::config::Config;
 use crate::sandbox;
 use crate::snapshot;
@@ -38,9 +40,13 @@ pub fn create_router(state: AppState) -> Router {
             axum::routing::delete(api_key::delete_key),
         )
         .route("/api/v1/keys/{id}/rotate", post(api_key::rotate_key))
-        .with_state(state)
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_api_key,
+        ))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
+        .with_state(state)
 }
 
 fn cors_layer(config: &Config) -> CorsLayer {
