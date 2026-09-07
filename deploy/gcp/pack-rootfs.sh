@@ -19,7 +19,8 @@ pack_python() {
     py=$(type -P python3 || true)
     [ -n "$py" ] || return 0
     sudo mkdir -p "$dest/usr/bin"
-    sudo cp -a "$py" "$dest/usr/bin/"
+    sudo cp -aL "$py" "$dest/usr/bin/python3"
+    if [ -f /usr/bin/python3.12 ]; then sudo cp -a /usr/bin/python3.12 "$dest/usr/bin/"; fi
     ldd "$py" 2>/dev/null | awk '/=>/ {print $3} /^[[:space:]]*\// {print $1}' | while read -r so; do
         [ -f "$so" ] || continue
         sudo mkdir -p "$dest$(dirname "$so")"
@@ -47,5 +48,6 @@ else
     sudo cp -a "$OUT/base" "$OUT/node-22"
 fi
 
+sudo chown -R cloudcell:cloudcell "$OUT" 2>/dev/null || sudo chmod -R a+rX "$OUT"
 echo "snapshots in $OUT:"
-sudo du -sh "$OUT"/* 
+sudo du -sh "$OUT/base" "$OUT/python-3.12" "$OUT/node-22"
