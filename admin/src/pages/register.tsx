@@ -19,6 +19,7 @@ function usernameFromEmail(email: string): string {
 export default function RegisterPage() {
   useI18n()
   const navigate = useNavigate()
+  const [emailSent, setEmailSent] = useState(false)
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
   const [password, setPassword] = useState("")
@@ -35,7 +36,8 @@ export default function RegisterPage() {
 
   if (getSession()) return <Navigate to="/" replace />
 
-  async function onSendCode() {
+  async function onSendCode(e?: FormEvent) {
+    if (e) e.preventDefault()
     const trimmed = email.trim()
     if (!trimmed || !trimmed.includes("@") || trimmed.includes(" ")) {
       toast.error(t("auth.email"))
@@ -49,6 +51,7 @@ export default function RegisterPage() {
       })
       toast.success(t("auth.codeSent"))
       setCountdown(60)
+      setEmailSent(true)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("common.error"))
     } finally {
@@ -97,98 +100,128 @@ export default function RegisterPage() {
 
   return (
     <AuthCardLayout activeTab="register" title={t("auth.registerTitle")}>
-      <form className="space-y-6" onSubmit={onSubmit}>
-        <div className="space-y-2">
-          <Label htmlFor="email" className="ml-1 text-sm font-semibold text-foreground/80">
-            {t("auth.email")}
-          </Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t("auth.emailPlaceholder")}
-            className={fieldClassName}
-            required
-            autoFocus
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="code" className="ml-1 text-sm font-semibold text-foreground/80">
-            {t("auth.code")}
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              id="code"
-              name="code"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              autoComplete="one-time-code"
-              placeholder={t("auth.codePlaceholder")}
-              className={`${fieldClassName} flex-1 font-mono tracking-widest`}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              required
-            />
+      <div className="min-h-[320px]">
+        {!emailSent ? (
+          <form className="space-y-6" onSubmit={onSendCode}>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="ml-1 text-sm font-semibold text-foreground/80">
+                {t("auth.email")}
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={t("auth.emailPlaceholder")}
+                className={fieldClassName}
+                required
+                autoFocus
+              />
+            </div>
             <Button
-              type="button"
-              variant="outline"
-              className="h-12 shrink-0"
-              disabled={sendingCode || countdown > 0 || !email.trim()}
-              onClick={() => void onSendCode()}
+              type="submit"
+              className="h-12 w-full gap-2 text-base font-semibold"
+              disabled={sendingCode || !email.trim()}
             >
-              {sendingCode ? t("common.loading") : sendLabel}
+              {sendingCode ? t("common.loading") : t("auth.sendCode")}
+              {!sendingCode && <ArrowRight className="h-5 w-5" />}
             </Button>
-          </div>
-        </div>
+          </form>
+        ) : (
+          <form className="space-y-6" onSubmit={onSubmit}>
+            <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              <span className="truncate">{email}</span>
+              <button
+                type="button"
+                className="ml-2 shrink-0 text-xs font-semibold text-primary underline-offset-4 hover:underline"
+                onClick={() => {
+                  setEmailSent(false)
+                  setCode("")
+                  setPassword("")
+                  setConfirm("")
+                }}
+              >
+                {t("auth.changeEmail")}
+              </button>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="password" className="ml-1 text-sm font-semibold text-foreground/80">
-            {t("auth.password")}
-          </Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder={t("auth.passwordPlaceholder")}
-            className={fieldClassName}
-            minLength={8}
-            required
-          />
-        </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="code" className="ml-1 text-sm font-semibold text-foreground/80">
+                  {t("auth.code")}
+                </Label>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-primary underline-offset-4 hover:underline disabled:no-underline disabled:opacity-50"
+                  disabled={sendingCode || countdown > 0}
+                  onClick={() => void onSendCode()}
+                >
+                  {sendingCode ? t("common.loading") : sendLabel}
+                </button>
+              </div>
+              <Input
+                id="code"
+                name="code"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                autoComplete="one-time-code"
+                placeholder={t("auth.codePlaceholder")}
+                className={`${fieldClassName} font-mono tracking-widest`}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                autoFocus
+              />
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="confirm" className="ml-1 text-sm font-semibold text-foreground/80">
-            {t("auth.confirmPassword")}
-          </Label>
-          <Input
-            id="confirm"
-            name="confirm-password"
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            placeholder={t("auth.confirmPasswordPlaceholder")}
-            className={fieldClassName}
-            minLength={8}
-            required
-          />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="ml-1 text-sm font-semibold text-foreground/80">
+                {t("auth.password")}
+              </Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("auth.passwordPlaceholder")}
+                className={fieldClassName}
+                minLength={8}
+                required
+              />
+            </div>
 
-        <Button type="submit" className="h-12 w-full gap-2 text-base font-semibold" disabled={pending}>
-          {pending ? t("common.loading") : t("auth.register")}
-          {!pending && <ArrowRight className="h-5 w-5" />}
-        </Button>
-      </form>
+            <div className="space-y-2">
+              <Label htmlFor="confirm" className="ml-1 text-sm font-semibold text-foreground/80">
+                {t("auth.confirmPassword")}
+              </Label>
+              <Input
+                id="confirm"
+                name="confirm-password"
+                type="password"
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder={t("auth.confirmPasswordPlaceholder")}
+                className={fieldClassName}
+                minLength={8}
+                required
+              />
+            </div>
+
+            <Button type="submit" className="h-12 w-full gap-2 text-base font-semibold" disabled={pending}>
+              {pending ? t("common.loading") : t("auth.register")}
+              {!pending && <ArrowRight className="h-5 w-5" />}
+            </Button>
+          </form>
+        )}
+      </div>
     </AuthCardLayout>
   )
 }
