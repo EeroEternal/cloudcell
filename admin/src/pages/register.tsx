@@ -171,7 +171,7 @@ export default function RegisterPage() {
                 maxLength={6}
                 autoComplete="one-time-code"
                 placeholder={t("auth.codePlaceholder")}
-                className={`${fieldClassName} font-mono tracking-widest`}
+                className={fieldClassName}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 required
