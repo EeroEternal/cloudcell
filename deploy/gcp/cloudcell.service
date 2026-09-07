@@ -14,6 +14,16 @@ Restart=on-failure
 RestartSec=2
 LimitNOFILE=65535
 
+# Let sand create agentcell-* children with cpu/memory/pids.max.
+# DelegateSubgroup=init keeps this process out of the unit cgroup so
+# subtree_control can be enabled (cgroup v2 no-internal-process).
+Delegate=yes
+DelegateControllers=cpu memory pids
+DelegateSubgroup=init
+CPUAccounting=yes
+MemoryAccounting=yes
+TasksAccounting=yes
+
 # Isolation stays in agentcell on this host; the API itself is unprivileged.
 NoNewPrivileges=true
 ProtectSystem=strict
