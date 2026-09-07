@@ -78,6 +78,13 @@ pub fn encode_argv(argv: &[String]) -> Vec<u8> {
 }
 
 pub fn parse_sock_line(line: &str) -> Option<PathBuf> {
+    let line = line.trim();
+    if let Some(rest) = line.strip_prefix("AGENTCELL_SOCK=") {
+        let path = rest.trim();
+        if !path.is_empty() {
+            return Some(PathBuf::from(path));
+        }
+    }
     let rest = line.split("serving ").nth(1)?;
     let path = rest.split_whitespace().next()?;
     if path.is_empty() {
@@ -143,8 +150,15 @@ async fn spawn_sand(
         .await
         .map_err(|e| Error::Internal(anyhow::anyhow!("create workdir: {e}")))?;
 
+    let sock_path = workdir
+        .parent()
+        .map(|p| p.join("cell.sock"))
+        .unwrap_or_else(|| workdir.join("cell.sock"));
+
     let mut child = Command::new(sand_bin)
         .arg("serve")
+        .arg("--sock")
+        .arg(&sock_path)
         .arg("--mem")
         .arg(mem_bytes.to_string())
         .arg("--cpu")
@@ -235,6 +249,10 @@ mod tests {
         assert_eq!(
             parse_sock_line(line).unwrap(),
             PathBuf::from("/run/user/1000/agentcell-1120702.sock")
+        );
+        assert_eq!(
+            parse_sock_line("AGENTCELL_SOCK=/var/lib/cloudcell/sbx/x/cell.sock\n").unwrap(),
+            PathBuf::from("/var/lib/cloudcell/sbx/x/cell.sock")
         );
     }
 
