@@ -8,15 +8,15 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 | --- | --- | --- |
 | GET | `/health` | `{ status: ok, service: cloudcell }` (no auth) |
 | GET | `/api/v1/ping` | `{ message: pong }` (no auth) |
-| GET/POST | `/api/v1/sandboxes` | SQLite records. Create is **`pending`** unless `CLOUDCELL_SAND` starts `sand serve` (**`running`**). |
-| GET/DELETE | `/api/v1/sandboxes/{id}` | Record lookup / delete (SIGTERM the cell if live) |
+| GET/POST | `/api/v1/sandboxes` | Per-user SQLite records. Create is **`pending`** unless `CLOUDCELL_SAND` starts `sand serve` (**`running`**). |
+| GET/DELETE | `/api/v1/sandboxes/{id}` | Owner-only lookup / delete (SIGTERM the cell if live). Other users get 404. |
 | POST | `/api/v1/sandboxes/{id}/exec` | AgentCell serve protocol when a live cell exists; otherwise **501** / **409** |
 | GET | `/api/v1/snapshots` | Static catalog (`base`, `python-3.12`, `node-22`), status **`declared`** |
-| GET/POST | `/api/v1/keys` | Create returns plaintext **once**; store is SHA-256 only |
+| GET/POST | `/api/v1/keys` | Per-user. Create returns plaintext **once**; store is SHA-256 only |
 | DELETE | `/api/v1/keys/{id}` | Immediate invalidate |
 | POST | `/api/v1/keys/{id}/rotate` | New plaintext once; old hash dropped |
 
-Auth: session (`cc_sess_…`) or API key (`cc_live_…`). Register is email → `POST /api/v1/auth/send-code` → `verify-code` → `register` (username + password). Login is email + password. Mail: `CF_EMAIL_*` or `MAIL_*`; otherwise the code is logged (dev). Public: `/health`, `/api/v1/ping`, `/api/v1/auth/status`, send-code, verify-code, register, login.
+Auth: session (`cc_sess_…`) or API key (`cc_live_…`). Both resolve to a `user_id`; sandboxes and keys are scoped to that user. Register is email → send-code → password. Mail: `CF_EMAIL_*` or `MAIL_*`; otherwise the code is logged (dev).
 
 Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`, `--net none`. Unknown snapshot → 400.
 
@@ -29,7 +29,7 @@ Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **s
 - Packed snapshot erofs / `--rootfs` (catalog ids are declared only)
 - `--net veth`, `--egress`, preview URLs, PTY, file upload
 - `agentlsm` audit stream
-- Org/project tenancy (one SQLite, all keys share one sandbox table)
+- Org/project tenancy (per-user isolation only; no orgs yet)
 
 ## Invariants for the agent milestone
 

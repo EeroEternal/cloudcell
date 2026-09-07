@@ -40,6 +40,10 @@ fn last_code(mailer: &Mailer) -> String {
 }
 
 async fn register_session(app: &axum::Router, mailer: &Mailer) -> String {
+    register_named(app, mailer, "ci@cloudcell.dev").await
+}
+
+async fn register_named(app: &axum::Router, mailer: &Mailer, email: &str) -> String {
     let send = app
         .clone()
         .oneshot(
@@ -47,7 +51,7 @@ async fn register_session(app: &axum::Router, mailer: &Mailer) -> String {
                 .method("POST")
                 .uri("/api/v1/auth/send-code")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"email":"ci@cloudcell.dev"}"#))
+                .body(Body::from(format!(r#"{{"email":"{email}"}}"#)))
                 .unwrap(),
         )
         .await
@@ -62,7 +66,7 @@ async fn register_session(app: &axum::Router, mailer: &Mailer) -> String {
                 .uri("/api/v1/auth/verify-code")
                 .header("content-type", "application/json")
                 .body(Body::from(format!(
-                    r#"{{"email":"ci@cloudcell.dev","code":"{code}"}}"#
+                    r#"{{"email":"{email}","code":"{code}"}}"#
                 )))
                 .unwrap(),
         )
@@ -77,7 +81,7 @@ async fn register_session(app: &axum::Router, mailer: &Mailer) -> String {
                 .uri("/api/v1/auth/register")
                 .header("content-type", "application/json")
                 .body(Body::from(format!(
-                    r#"{{"email":"ci@cloudcell.dev","code":"{code}","username":"ci","password":"password1"}}"#
+                    r#"{{"email":"{email}","code":"{code}","password":"password1"}}"#
                 )))
                 .unwrap(),
         )
@@ -301,6 +305,72 @@ async fn test_snapshot_catalog_requires_auth() {
     let json = json_body(response).await;
     assert_eq!(json.as_array().unwrap().len(), 3);
     assert_eq!(json[0]["status"], "declared");
+}
+
+#[tokio::test]
+async fn test_sandboxes_are_per_user() {
+    let (app, mailer) = harness().await;
+    let alice = register_named(&app, &mailer, "alice@cloudcell.dev").await;
+    let bob = register_named(&app, &mailer, "bob@cloudcell.dev").await;
+
+    let created = app
+        .clone()
+        .oneshot(json_req(
+            "POST",
+            "/api/v1/sandboxes",
+            &alice,
+            r#"{"snapshot":"base"}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::OK);
+    let id = json_body(created).await["id"].as_str().unwrap().to_string();
+
+    let bobs_list = app
+        .clone()
+        .oneshot(get_req("/api/v1/sandboxes", &bob))
+        .await
+        .unwrap();
+    assert_eq!(json_body(bobs_list).await.as_array().unwrap().len(), 0);
+
+    let bobs_get = app
+        .clone()
+        .oneshot(get_req(&format!("/api/v1/sandboxes/{id}"), &bob))
+        .await
+        .unwrap();
+    assert_eq!(bobs_get.status(), StatusCode::NOT_FOUND);
+
+    let bobs_exec = app
+        .clone()
+        .oneshot(json_req(
+            "POST",
+            &format!("/api/v1/sandboxes/{id}/exec"),
+            &bob,
+            r#"{"argv":["true"]}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(bobs_exec.status(), StatusCode::NOT_FOUND);
+
+    let bobs_del = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/api/v1/sandboxes/{id}"))
+                .header("authorization", format!("Bearer {bob}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(bobs_del.status(), StatusCode::NOT_FOUND);
+
+    let alice_list = app
+        .oneshot(get_req("/api/v1/sandboxes", &alice))
+        .await
+        .unwrap();
+    assert_eq!(json_body(alice_list).await.as_array().unwrap().len(), 1);
 }
 
 #[tokio::test]

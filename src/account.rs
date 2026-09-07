@@ -158,8 +158,18 @@ pub async fn lookup_session_email(state: &AppState, token: &str) -> Result<Optio
     Ok(email)
 }
 
-pub async fn session_valid(state: &AppState, token: &str) -> Result<bool> {
-    Ok(lookup_session_email(state, token).await?.is_some())
+pub async fn session_user_id(state: &AppState, token: &str) -> Result<Option<String>> {
+    if !token.starts_with("cc_sess_") {
+        return Ok(None);
+    }
+    let now = Utc::now().to_rfc3339();
+    let id: Option<String> =
+        sqlx::query_scalar("SELECT user_id FROM sessions WHERE hash = ? AND expires_at > ?")
+            .bind(hash_key(token))
+            .bind(now)
+            .fetch_optional(&state.db)
+            .await?;
+    Ok(id)
 }
 
 fn six_digit_code() -> String {

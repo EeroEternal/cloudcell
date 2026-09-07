@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+use crate::auth::AuthUser;
 use crate::error::{Error, Result};
 use crate::state::AppState;
 
@@ -82,10 +83,15 @@ fn to_list_item(record: ApiKeyRecord) -> Result<ApiKeyListItem> {
     })
 }
 
-pub async fn list_keys(State(state): State<AppState>) -> Result<Json<Vec<ApiKeyListItem>>> {
+pub async fn list_keys(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Result<Json<Vec<ApiKeyListItem>>> {
     let rows = sqlx::query_as::<_, ApiKeyRecord>(
-        "SELECT id, name, prefix, hash, created_at FROM api_keys ORDER BY created_at DESC",
+        "SELECT id, name, prefix, hash, created_at FROM api_keys
+         WHERE user_id = ? ORDER BY created_at DESC",
     )
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
     let items = rows
@@ -97,6 +103,7 @@ pub async fn list_keys(State(state): State<AppState>) -> Result<Json<Vec<ApiKeyL
 
 pub async fn create_key(
     State(state): State<AppState>,
+    user: AuthUser,
     Json(body): Json<CreateApiKey>,
 ) -> Result<Json<ApiKeyCreated>> {
     let name = body.name.trim().to_string();
@@ -122,24 +129,30 @@ pub async fn create_key(
     };
     debug_assert!(key_matches(&record, &created.key));
 
-    sqlx::query("INSERT INTO api_keys (id, name, prefix, hash, created_at) VALUES (?, ?, ?, ?, ?)")
-        .bind(&record.id)
-        .bind(&record.name)
-        .bind(&record.prefix)
-        .bind(&record.hash)
-        .bind(&record.created_at)
-        .execute(&state.db)
-        .await?;
+    sqlx::query(
+        "INSERT INTO api_keys (id, name, prefix, hash, created_at, user_id)
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&record.id)
+    .bind(&record.name)
+    .bind(&record.prefix)
+    .bind(&record.hash)
+    .bind(&record.created_at)
+    .bind(&user.id)
+    .execute(&state.db)
+    .await?;
 
     Ok(Json(created))
 }
 
 pub async fn delete_key(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
-    let result = sqlx::query("DELETE FROM api_keys WHERE id = ?")
+    let result = sqlx::query("DELETE FROM api_keys WHERE id = ? AND user_id = ?")
         .bind(&id)
+        .bind(&user.id)
         .execute(&state.db)
         .await?;
     if result.rows_affected() == 0 {
@@ -150,12 +163,14 @@ pub async fn delete_key(
 
 pub async fn rotate_key(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiKeyCreated>> {
     let mut record = sqlx::query_as::<_, ApiKeyRecord>(
-        "SELECT id, name, prefix, hash, created_at FROM api_keys WHERE id = ?",
+        "SELECT id, name, prefix, hash, created_at FROM api_keys WHERE id = ? AND user_id = ?",
     )
     .bind(&id)
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| Error::NotFound(format!("api key {id}")))?;

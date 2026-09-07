@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Request, State},
-    http::{Method, header},
+    extract::{FromRequestParts, Request, State},
+    http::{Method, header, request::Parts},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -10,9 +10,29 @@ use crate::api_key::hash_key;
 use crate::error::Error;
 use crate::state::AppState;
 
+#[derive(Clone, Debug)]
+pub struct AuthUser {
+    pub id: String,
+}
+
+impl FromRequestParts<AppState> for AuthUser {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &AppState,
+    ) -> std::result::Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<AuthUser>()
+            .cloned()
+            .ok_or_else(|| Error::Unauthorized("missing bearer token".into()))
+    }
+}
+
 pub async fn require_api_key(
     State(state): State<AppState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Response {
     let path = request.uri().path();
@@ -24,9 +44,12 @@ pub async fn require_api_key(
         return Error::Unauthorized("missing bearer token".into()).into_response();
     };
 
-    match is_authorized(&state, token).await {
-        Ok(true) => next.run(request).await,
-        Ok(false) => Error::Unauthorized("invalid bearer token".into()).into_response(),
+    match resolve_user(&state, token).await {
+        Ok(Some(user)) => {
+            request.extensions_mut().insert(user);
+            next.run(request).await
+        }
+        Ok(None) => Error::Unauthorized("invalid bearer token".into()).into_response(),
         Err(err) => err.into_response(),
     }
 }
@@ -53,14 +76,16 @@ fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
-async fn is_authorized(state: &AppState, token: &str) -> crate::error::Result<bool> {
+async fn resolve_user(state: &AppState, token: &str) -> crate::error::Result<Option<AuthUser>> {
     if token.starts_with("cc_sess_") {
-        return account::session_valid(state, token).await;
+        let id = account::session_user_id(state, token).await?;
+        return Ok(id.map(|id| AuthUser { id }));
     }
     let hash = hash_key(token);
-    let found: Option<String> = sqlx::query_scalar("SELECT id FROM api_keys WHERE hash = ?")
-        .bind(hash)
-        .fetch_optional(&state.db)
-        .await?;
-    Ok(found.is_some())
+    let id: Option<String> =
+        sqlx::query_scalar("SELECT user_id FROM api_keys WHERE hash = ? AND user_id IS NOT NULL")
+            .bind(hash)
+            .fetch_optional(&state.db)
+            .await?;
+    Ok(id.map(|id| AuthUser { id }))
 }

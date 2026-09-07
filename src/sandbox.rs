@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+use crate::auth::AuthUser;
 use crate::cell;
 use crate::error::{Error, Result};
 use crate::snapshot;
@@ -106,11 +107,15 @@ impl TryFrom<SandboxRow> for Sandbox {
     }
 }
 
-pub async fn list_sandboxes(State(state): State<AppState>) -> Result<Json<Vec<Sandbox>>> {
+pub async fn list_sandboxes(
+    State(state): State<AppState>,
+    user: AuthUser,
+) -> Result<Json<Vec<Sandbox>>> {
     let rows = sqlx::query_as::<_, SandboxRow>(
         "SELECT id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at
-         FROM sandboxes ORDER BY created_at DESC",
+         FROM sandboxes WHERE user_id = ? ORDER BY created_at DESC",
     )
+    .bind(&user.id)
     .fetch_all(&state.db)
     .await?;
     let items = rows
@@ -122,6 +127,7 @@ pub async fn list_sandboxes(State(state): State<AppState>) -> Result<Json<Vec<Sa
 
 pub async fn create_sandbox(
     State(state): State<AppState>,
+    user: AuthUser,
     Json(body): Json<CreateSandbox>,
 ) -> Result<Json<Sandbox>> {
     let snapshot = body.snapshot.unwrap_or_else(|| "base".into());
@@ -165,8 +171,8 @@ pub async fn create_sandbox(
 
     sqlx::query(
         "INSERT INTO sandboxes
-         (id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+         (id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&sandbox.id)
     .bind(&sandbox.snapshot)
@@ -176,6 +182,7 @@ pub async fn create_sandbox(
     .bind(i64::from(sandbox.pids))
     .bind(&egress_json)
     .bind(sandbox.created_at.to_rfc3339())
+    .bind(&user.id)
     .execute(&state.db)
     .await?;
 
@@ -224,13 +231,15 @@ pub async fn create_sandbox(
 
 pub async fn get_sandbox(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<Sandbox>> {
     let row = sqlx::query_as::<_, SandboxRow>(
         "SELECT id, snapshot, state, cpu, mem_bytes, pids, egress_json, created_at
-         FROM sandboxes WHERE id = ?",
+         FROM sandboxes WHERE id = ? AND user_id = ?",
     )
     .bind(&id)
+    .bind(&user.id)
     .fetch_optional(&state.db)
     .await?
     .ok_or_else(|| Error::NotFound(format!("sandbox {id}")))?;
@@ -239,33 +248,44 @@ pub async fn get_sandbox(
 
 pub async fn delete_sandbox(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>> {
+    let owned: Option<String> =
+        sqlx::query_scalar("SELECT id FROM sandboxes WHERE id = ? AND user_id = ?")
+            .bind(&id)
+            .bind(&user.id)
+            .fetch_optional(&state.db)
+            .await?;
+    if owned.is_none() {
+        return Err(Error::NotFound(format!("sandbox {id}")));
+    }
     state.cells.shutdown(&id).await?;
     let workdir = state.config.data_dir.join("sbx").join(&id);
     let _ = tokio::fs::remove_dir_all(&workdir).await;
-    let result = sqlx::query("DELETE FROM sandboxes WHERE id = ?")
+    sqlx::query("DELETE FROM sandboxes WHERE id = ? AND user_id = ?")
         .bind(&id)
+        .bind(&user.id)
         .execute(&state.db)
         .await?;
-    if result.rows_affected() == 0 {
-        return Err(Error::NotFound(format!("sandbox {id}")));
-    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 pub async fn exec_sandbox(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(id): Path<String>,
     Json(body): Json<ExecRequest>,
 ) -> Result<Json<serde_json::Value>> {
     if body.argv.is_empty() {
         return Err(Error::BadRequest("argv must not be empty".into()));
     }
-    let row_state: Option<String> = sqlx::query_scalar("SELECT state FROM sandboxes WHERE id = ?")
-        .bind(&id)
-        .fetch_optional(&state.db)
-        .await?;
+    let row_state: Option<String> =
+        sqlx::query_scalar("SELECT state FROM sandboxes WHERE id = ? AND user_id = ?")
+            .bind(&id)
+            .bind(&user.id)
+            .fetch_optional(&state.db)
+            .await?;
     let Some(row_state) = row_state else {
         return Err(Error::NotFound(format!("sandbox {id}")));
     };
