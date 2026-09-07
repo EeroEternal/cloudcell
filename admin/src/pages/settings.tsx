@@ -304,15 +304,33 @@ function ConsoleKeySection() {
     <SectionCard
       title={t("settings.consoleKey", "Console API key")}
       headerExtra={
-        !editing ? (
-          <Button variant="outline" size="sm" onClick={startEdit} className="h-8 text-xs font-medium">
-            {t("settings.edit", "Edit")}
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" onClick={cancelEdit} className="h-8 text-xs">
-            {t("settings.cancel", "Cancel")}
-          </Button>
-        )
+        <div className="flex items-center gap-2">
+          {!editing ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startEdit}
+              className="h-8 gap-1.5 text-xs font-medium"
+            >
+              <Sliders className="h-3.5 w-3.5 text-primary" />
+              Edit Settings
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelEdit}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Cancel Edit
+            </Button>
+          )}
+          <div className="flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+            <div className="h-1.5 w-1.5 rounded-full bg-success" />
+            Active
+          </div>
+        </div>
       }
     >
       {!editing ? (
