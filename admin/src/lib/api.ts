@@ -7,8 +7,19 @@ export class ApiError extends Error {
 
   constructor(status: number, message: string) {
     super(message)
+    this.name = "ApiError"
     this.status = status
+    Object.setPrototypeOf(this, new.target.prototype)
   }
+}
+
+function isApiError(err: unknown): err is ApiError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as ApiError).name === "ApiError" &&
+    typeof (err as ApiError).status === "number"
+  )
 }
 
 export function getApiKey(): string {
@@ -45,6 +56,16 @@ export type AuthResponse = {
   email: string
 }
 
+export function isConflict(err: unknown): boolean {
+  return isApiError(err) && err.status === 409
+}
+
+export function errorMessage(err: unknown, fallback: string): string {
+  if (isApiError(err) && err.message) return err.message
+  if (err instanceof Error && err.message) return err.message
+  return fallback
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (init?.body && !headers.has("content-type")) {
@@ -56,13 +77,19 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
   const text = await response.text()
-  const data = text ? (JSON.parse(text) as { error?: { message?: string } } & T) : ({} as T)
+  let data: { error?: { message?: string } } = {}
+  if (text) {
+    try {
+      data = JSON.parse(text) as { error?: { message?: string } }
+    } catch {
+      data = {}
+    }
+  }
   if (!response.ok) {
-    const message =
-      (data as { error?: { message?: string } }).error?.message ||
-      response.statusText ||
-      "request failed"
-    throw new ApiError(response.status, message)
+    throw new ApiError(
+      response.status,
+      data.error?.message || response.statusText || "request failed",
+    )
   }
   return data as T
 }

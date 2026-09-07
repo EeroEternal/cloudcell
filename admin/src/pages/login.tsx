@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { AuthCardLayout } from "@/components/layout/auth-card-layout"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { api, getSession, setSession } from "@/lib/api"
+import { api, errorMessage, getSession, setSession } from "@/lib/api"
 import { t, useI18n } from "@/lib/i18n"
 
 const fieldClassName =
@@ -33,7 +33,7 @@ export default function LoginPage() {
       setSession(res.token)
       navigate("/", { replace: true })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("common.error"))
+      toast.error(errorMessage(err, t("common.error")))
     } finally {
       setPending(false)
     }

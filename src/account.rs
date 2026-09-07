@@ -260,13 +260,9 @@ pub async fn register(
             "invalid or expired verification code".into(),
         ));
     }
-    let username = body
-        .username
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| email.clone());
+    // Username must be unique; email is already unique so use it as the handle.
+    // Client-supplied local-part (foo from foo@x.com) collides across domains.
+    let username = email.clone();
     let id = Uuid::new_v4().to_string();
     let password_hash = hash_password(&body.password)?;
     let inserted = sqlx::query(
