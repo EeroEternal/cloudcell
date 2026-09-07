@@ -1,1 +1,3 @@
-/*    /index.html   200
+/api/*  https://api.cloudcell.dev/api/:splat  200
+/health https://api.cloudcell.dev/health  200
+/*      /index.html   200

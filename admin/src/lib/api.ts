@@ -1,4 +1,16 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? ""
+function resolveApiBase(): string {
+  const fromEnv = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, "")
+  if (fromEnv) return fromEnv
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname
+    if (host === "cloudcell.dev" || host === "www.cloudcell.dev") {
+      return "https://api.cloudcell.dev"
+    }
+  }
+  return ""
+}
+
+const API_BASE = resolveApiBase()
 const API_KEY_STORAGE = "cloudcell.api_key"
 const SESSION_STORAGE = "cloudcell.session"
 

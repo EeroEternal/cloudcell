@@ -8,6 +8,7 @@ cloudcell.db-*
 .env
 .env.*
 !.env.example
+!.env.production
 dist/
 node_modules/
 admin/dist/
