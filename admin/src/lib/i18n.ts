@@ -1,111 +1,121 @@
+import { useEffect, useState } from "react"
+
 export type Language = "zh" | "en"
+
+const LANG_EVENT = "cloudcell-lang"
 
 const en = {
   auth: {
-    introBadge: "Sandbox platform",
-    introHeading: "Kernel sandboxes for AI agents",
-    introSubheading:
+    productName: "Cloudcell",
+    brandingTitle: "Kernel sandboxes",
+    brandingSubtitle: "for AI agents",
+    brandingDescription:
       "Run untrusted agent code in AgentCell jails — namespaces, Landlock, seccomp, and cgroup. No Docker.",
-    introPoint1Title: "Fast cells",
-    introPoint1Desc: "sand serve starts in milliseconds. Exec rides the unix protocol.",
-    introPoint2Title: "Kernel isolation",
-    introPoint2Desc: "User, mount, pid, and net namespaces with Landlock and seccomp.",
-    introPoint3Title: "API first",
-    introPoint3Desc: "Create sandboxes, keys, and exec from the console or HTTP.",
-    tagGit: "AgentCell",
-    tagSession: "cgroup v2",
-    tagLoop: "Landlock",
-    registerTab: "Register",
-    loginTab: "Sign in",
-    workspaceLoginTitle: "Sign in to Cloudcell",
-    workspaceLoginDesc: "Use the email and password for this workspace.",
-    workspaceRegisterTitle: "Create your account",
-    workspaceRegisterDesc: "Verify email, then set a username and password.",
+    statStart: "cold start",
+    statDocker: "containers",
+    statKernel: "isolation",
+    loginTitle: "Sign in",
+    registerTitle: "Create account",
+    noAccount: "No account?",
+    hasAccount: "Already registered?",
+    registerNow: "Register",
+    loginNow: "Sign in",
     email: "Email",
+    emailPlaceholder: "you@company.com",
     password: "Password",
+    passwordPlaceholder: "Enter password",
     confirmPassword: "Confirm password",
-    username: "Username",
-    usernamePlaceholder: "workspace-name",
+    confirmPasswordPlaceholder: "Enter password again",
     login: "Sign in",
+    register: "Create account",
     sendCode: "Send code",
-    resendCode: "Resend",
     code: "Verification code",
+    codePlaceholder: "6-digit code",
     codeSent: "Code sent",
     codeInvalid: "Enter the 6-digit code",
-    next: "Next",
-    back: "Back",
-    completeRegister: "Create account",
     registerOk: "Account created",
     passwordTooShort: "Password must be at least 8 characters",
     passwordMismatch: "Passwords do not match",
-    termsNotice: "By continuing you agree to the Cloudcell terms of use.",
+    showPassword: "Show password",
+    hidePassword: "Hide password",
     signOut: "Sign out",
   },
-  common: { error: "Request failed" },
+  common: {
+    error: "Request failed",
+    loading: "…",
+    language: "Language",
+    chinese: "中文",
+    english: "English",
+  },
 }
 
 const zh: typeof en = {
   auth: {
-    introBadge: "沙箱平台",
-    introHeading: "给 AI Agent 用的内核沙箱",
-    introSubheading:
+    productName: "Cloudcell",
+    brandingTitle: "内核沙箱",
+    brandingSubtitle: "给 AI Agent",
+    brandingDescription:
       "在 AgentCell jail 里跑不信任的代码：namespace、Landlock、seccomp、cgroup。不用 Docker。",
-    introPoint1Title: "启动快",
-    introPoint1Desc: "sand serve 毫秒级拉起，exec 走 unix 协议。",
-    introPoint2Title: "内核隔离",
-    introPoint2Desc: "user / mount / pid / net namespace，加上 Landlock 与 seccomp。",
-    introPoint3Title: "API 优先",
-    introPoint3Desc: "控制台或 HTTP 创建 sandbox、密钥并执行命令。",
-    tagGit: "AgentCell",
-    tagSession: "cgroup v2",
-    tagLoop: "Landlock",
-    registerTab: "注册",
-    loginTab: "登录",
-    workspaceLoginTitle: "登录 Cloudcell",
-    workspaceLoginDesc: "使用此工作区的邮箱和密码。",
-    workspaceRegisterTitle: "创建账号",
-    workspaceRegisterDesc: "先验证邮箱，再设置用户名和密码。",
+    statStart: "冷启动",
+    statDocker: "容器",
+    statKernel: "隔离",
+    loginTitle: "登录",
+    registerTitle: "创建账号",
+    noAccount: "还没有账号？",
+    hasAccount: "已经注册？",
+    registerNow: "去注册",
+    loginNow: "去登录",
     email: "邮箱",
+    emailPlaceholder: "you@company.com",
     password: "密码",
+    passwordPlaceholder: "输入密码",
     confirmPassword: "确认密码",
-    username: "用户名",
-    usernamePlaceholder: "工作区名称",
+    confirmPasswordPlaceholder: "再次输入密码",
     login: "登录",
+    register: "创建账号",
     sendCode: "发送验证码",
-    resendCode: "重新发送",
     code: "验证码",
+    codePlaceholder: "6 位验证码",
     codeSent: "验证码已发送",
     codeInvalid: "请输入 6 位验证码",
-    next: "下一步",
-    back: "返回",
-    completeRegister: "完成注册",
     registerOk: "账号已创建",
     passwordTooShort: "密码至少 8 位",
     passwordMismatch: "两次密码不一致",
-    termsNotice: "继续即表示同意 Cloudcell 使用条款。",
+    showPassword: "显示密码",
+    hidePassword: "隐藏密码",
     signOut: "退出",
   },
-  common: { error: "请求失败" },
+  common: {
+    error: "请求失败",
+    loading: "…",
+    language: "语言",
+    chinese: "中文",
+    english: "English",
+  },
 }
 
 const dicts = { en, zh }
-
-export function useI18n() {
-  const language = (
-    typeof localStorage !== "undefined" ? localStorage.getItem("language") : null
-  ) as Language | null
-  return {
-    language: language === "zh" || language === "en" ? language : ("en" as const),
-    setLanguage: (lang: Language) => {
-      localStorage.setItem("language", lang)
-    },
-  }
-}
 
 function currentLanguage(): Language {
   const language =
     typeof localStorage !== "undefined" ? localStorage.getItem("language") : null
   return language === "zh" || language === "en" ? language : "en"
+}
+
+export function useI18n() {
+  const [language, setLangState] = useState<Language>(currentLanguage)
+  useEffect(() => {
+    const onChange = () => setLangState(currentLanguage())
+    window.addEventListener(LANG_EVENT, onChange)
+    return () => window.removeEventListener(LANG_EVENT, onChange)
+  }, [])
+  return {
+    language,
+    setLanguage: (lang: Language) => {
+      localStorage.setItem("language", lang)
+      window.dispatchEvent(new Event(LANG_EVENT))
+    },
+  }
 }
 
 export function t(key: string, fallback?: string): string {

@@ -1,118 +1,154 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { Card } from "@/components/ui/card"
+import { Languages } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Toaster } from "@/components/ui/sonner"
-import { cn } from "@/lib/utils"
-import { t, useI18n } from "@/lib/i18n"
+import { t, useI18n, type Language } from "@/lib/i18n"
+
+const revealStyle = (delayMs: number) => ({
+  animationDelay: `${delayMs}ms`,
+  animationFillMode: "both" as const,
+})
 
 interface AuthCardLayoutProps {
   activeTab: "register" | "login"
   title: string
-  subtitle: string
   children: ReactNode
 }
 
-export function AuthCardLayout({
-  activeTab,
-  title,
-  subtitle,
-  children,
-}: AuthCardLayoutProps) {
-  useI18n()
+function LanguageSwitcher() {
+  const { language, setLanguage } = useI18n()
+  const languages: { code: Language; name: string }[] = [
+    { code: "zh", name: t("common.chinese") },
+    { code: "en", name: t("common.english") },
+  ]
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
-      <Toaster position="top-center" richColors />
-      <div className="my-auto grid w-full max-w-4xl grid-cols-1 items-stretch gap-6 md:grid-cols-2">
-        <Card className="flex flex-col justify-between border bg-card/60 p-8 shadow-sm backdrop-blur-sm">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
-                C
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={t("common.language")}
+        >
+          <Languages aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="z-50">
+        {languages.map((lang) => (
+          <DropdownMenuItem
+            key={lang.code}
+            onClick={() => setLanguage(lang.code)}
+            className={language === lang.code ? "bg-accent" : ""}
+          >
+            {lang.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function BrandMark() {
+  return (
+    <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
+      C
+    </div>
+  )
+}
+
+export function AuthCardLayout({ activeTab, title, children }: AuthCardLayoutProps) {
+  useI18n()
+  const loginStats = [
+    { value: "~5ms", label: t("auth.statStart") },
+    { value: "0", label: t("auth.statDocker") },
+    { value: "LSM", label: t("auth.statKernel") },
+  ]
+
+  return (
+    <div className="flex min-h-screen overflow-hidden bg-background">
+      <div className="absolute right-4 top-4 z-50">
+        <LanguageSwitcher />
+      </div>
+
+      <div className="relative hidden items-center justify-center overflow-hidden bg-muted/30 lg:flex lg:w-1/2">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute right-[-10%] top-[10%] h-[60%] w-[60%] rounded-full bg-primary/10 blur-[120px]" />
+          <div className="absolute bottom-[-10%] left-[-10%] h-[40%] w-[40%] rounded-full bg-accent/5 blur-[100px]" />
+        </div>
+
+        <div className="relative z-10 px-12 xl:px-24">
+          <div
+            className="mb-10 flex items-center gap-3 duration-700 animate-in fade-in slide-in-from-bottom-5"
+            style={revealStyle(0)}
+          >
+            <BrandMark />
+            <span className="text-2xl font-semibold tracking-tight text-foreground/90">
+              {t("auth.productName")}
+            </span>
+          </div>
+
+          <h1
+            className="mb-4 text-4xl font-semibold leading-tight text-foreground duration-700 animate-in fade-in slide-in-from-bottom-5 xl:text-5xl"
+            style={revealStyle(100)}
+          >
+            {t("auth.brandingTitle")} <br />
+            <span className="text-primary">{t("auth.brandingSubtitle")}</span>
+          </h1>
+
+          <p
+            className="mb-16 max-w-lg text-lg leading-relaxed text-muted-foreground/80 duration-700 animate-in fade-in slide-in-from-bottom-5"
+            style={revealStyle(200)}
+          >
+            {t("auth.brandingDescription")}
+          </p>
+
+          <div
+            className="flex gap-12 duration-700 animate-in fade-in slide-in-from-bottom-5"
+            style={revealStyle(300)}
+          >
+            {loginStats.map((item) => (
+              <div key={item.label} className="flex flex-col gap-1">
+                <div className="text-3xl font-semibold text-foreground">{item.value}</div>
+                <div className="text-sm text-muted-foreground/60">{item.label}</div>
               </div>
-              <div>
-                <div className="text-base font-bold leading-tight text-foreground">Cloudcell</div>
-                <div className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
-                  {t("auth.introBadge")}
-                </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="relative flex flex-1 items-center justify-center overflow-y-auto bg-background p-6">
+        <div className="w-full max-w-[440px]">
+          <div className="rounded-lg border border-border bg-card p-10 shadow-sm lg:p-12">
+            <div className="duration-300 animate-in fade-in slide-in-from-right-4">
+              <div className="mb-10 text-center">
+                <h2 className="text-page-title text-foreground">{title}</h2>
               </div>
+              {children}
             </div>
-            <div className="mt-8 flex flex-col gap-3">
-              <h2 className="text-2xl font-bold leading-snug tracking-tight text-foreground">
-                {t("auth.introHeading")}
-              </h2>
-              <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                {t("auth.introSubheading")}
+
+            <div className="mt-8 text-center">
+              <p className="text-sm text-muted-foreground/70">
+                {activeTab === "login" ? t("auth.noAccount") : t("auth.hasAccount")}
+                <Link
+                  to={activeTab === "login" ? "/register" : "/login"}
+                  className="ml-2 font-semibold text-primary underline-offset-4 hover:underline"
+                >
+                  {activeTab === "login" ? t("auth.registerNow") : t("auth.loginNow")}
+                </Link>
               </p>
             </div>
-            <div className="mt-8 flex flex-col gap-4 border-t pt-6">
-              {[1, 2, 3].map((n) => (
-                <div key={n} className={n === 1 ? "flex items-start gap-3" : "flex items-start gap-3 border-t pt-4"}>
-                  <span className="mt-0.5 shrink-0 font-mono text-xs font-bold text-primary">
-                    0{n}
-                  </span>
-                  <div>
-                    <div className="text-xs font-semibold text-foreground sm:text-sm">
-                      {t(`auth.introPoint${n}Title`)}
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {t(`auth.introPoint${n}Desc`)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
-          <div className="mt-8 flex flex-wrap gap-2 border-t pt-6">
-            <span className="inline-flex items-center rounded-full border bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              {t("auth.tagGit")}
-            </span>
-            <span className="inline-flex items-center rounded-full border bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              {t("auth.tagSession")}
-            </span>
-            <span className="inline-flex items-center rounded-full border bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              {t("auth.tagLoop")}
-            </span>
-          </div>
-        </Card>
-
-        <Card className="flex flex-col justify-between border bg-card p-8 shadow-sm">
-          <div>
-            <div className="mb-8 grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-medium">
-              <Link
-                to="/register"
-                className={cn(
-                  "rounded-md py-1.5 text-center transition-all",
-                  activeTab === "register"
-                    ? "bg-background font-semibold text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("auth.registerTab")}
-              </Link>
-              <Link
-                to="/login"
-                className={cn(
-                  "rounded-md py-1.5 text-center transition-all",
-                  activeTab === "login"
-                    ? "bg-background font-semibold text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t("auth.loginTab")}
-              </Link>
-            </div>
-            <div className="mb-6 flex flex-col gap-1.5">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-              <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">{subtitle}</p>
-            </div>
-            {children}
-          </div>
-          <p className="mt-6 text-center text-[11px] text-muted-foreground/70">
-            {t("auth.termsNotice")}
-          </p>
-        </Card>
+        </div>
       </div>
+      <Toaster position="top-center" richColors />
     </div>
   )
 }

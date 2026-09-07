@@ -248,23 +248,17 @@ pub async fn register(
         return Err(Error::Forbidden("registration is disabled".into()));
     }
     let now = Utc::now().to_rfc3339();
-    let verified: Option<i64> =
-        sqlx::query_scalar("SELECT verified FROM email_codes WHERE email = ? AND expires_at > ?")
+    let code = body.code.trim();
+    let stored_hash: Option<String> =
+        sqlx::query_scalar("SELECT code_hash FROM email_codes WHERE email = ? AND expires_at > ?")
             .bind(&email)
             .bind(&now)
             .fetch_optional(&state.db)
             .await?;
-    if verified != Some(1) {
-        return Err(Error::BadRequest("email is not verified".into()));
-    }
-    let code = body.code.trim();
-    let stored_hash: Option<String> =
-        sqlx::query_scalar("SELECT code_hash FROM email_codes WHERE email = ?")
-            .bind(&email)
-            .fetch_optional(&state.db)
-            .await?;
     if stored_hash.as_deref() != Some(&hash_key(code)) {
-        return Err(Error::BadRequest("invalid verification code".into()));
+        return Err(Error::BadRequest(
+            "invalid or expired verification code".into(),
+        ));
     }
     let username = body
         .username
