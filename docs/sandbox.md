@@ -26,8 +26,9 @@ Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **s
 
 ## Not implemented
 
-- Packed snapshot erofs / `--rootfs` (catalog ids are declared only)
-- `--net veth`, `--egress`, preview URLs, PTY, file upload
+- Packed snapshot erofs as a single image file (trees under CLOUDCELL_ROOTFS_DIR work)
+- Multiple `--egress` destinations (first allowlist entry is applied)
+- Preview URLs, PTY, file upload
 - `agentlsm` audit stream
 - Org/project tenancy (per-user isolation only; no orgs yet)
 

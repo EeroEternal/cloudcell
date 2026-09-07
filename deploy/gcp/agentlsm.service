@@ -1,0 +1,13 @@
+[Unit]
+Description=AgentCell LSM, veth and egress provisioner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/agentlsm serve
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

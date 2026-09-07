@@ -193,15 +193,23 @@ pub async fn create_sandbox(
             .join("sbx")
             .join(&sandbox.id)
             .join("work");
+        let rootfs_path = state.config.rootfs_dir.join(&sandbox.snapshot);
+        let rootfs = rootfs_path.is_dir().then_some(rootfs_path);
+        let egress = sandbox.egress.first().cloned().filter(|s| !s.is_empty());
         match state
             .cells
             .start(
                 sandbox.id.clone(),
-                &sand,
-                &workdir,
-                sandbox.mem_bytes,
-                sandbox.cpu,
-                sandbox.pids,
+                cell::SpawnOpts {
+                    sand_bin: sand,
+                    workdir,
+                    mem_bytes: sandbox.mem_bytes,
+                    cpu: sandbox.cpu,
+                    pids: sandbox.pids,
+                    rootfs,
+                    net_veth: true,
+                    egress,
+                },
             )
             .await
         {

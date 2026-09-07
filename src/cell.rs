@@ -31,21 +31,24 @@ struct CellHandle {
     sock: PathBuf,
 }
 
+pub struct SpawnOpts {
+    pub sand_bin: PathBuf,
+    pub workdir: PathBuf,
+    pub mem_bytes: u64,
+    pub cpu: f64,
+    pub pids: u32,
+    pub rootfs: Option<PathBuf>,
+    pub net_veth: bool,
+    pub egress: Option<String>,
+}
+
 impl CellRegistry {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub async fn start(
-        &self,
-        id: String,
-        sand_bin: &Path,
-        workdir: &Path,
-        mem_bytes: u64,
-        cpu: f64,
-        pids: u32,
-    ) -> Result<(PathBuf, i64)> {
-        let handle = spawn_sand(sand_bin, workdir, mem_bytes, cpu, pids).await?;
+    pub async fn start(&self, id: String, opts: SpawnOpts) -> Result<(PathBuf, i64)> {
+        let handle = spawn_sand(opts).await?;
         let sock = handle.sock.clone();
         let pid = handle.child.id().map(i64::from).unwrap_or(0);
         self.inner.lock().await.insert(id, handle);
@@ -139,36 +142,41 @@ async fn exec_inner(sock: &Path, argv: &[String], stdin: &[u8]) -> Result<(Vec<u
     Ok((reply, code))
 }
 
-async fn spawn_sand(
-    sand_bin: &Path,
-    workdir: &Path,
-    mem_bytes: u64,
-    cpu: f64,
-    pids: u32,
-) -> Result<CellHandle> {
-    tokio::fs::create_dir_all(workdir)
+async fn spawn_sand(opts: SpawnOpts) -> Result<CellHandle> {
+    tokio::fs::create_dir_all(&opts.workdir)
         .await
         .map_err(|e| Error::Internal(anyhow::anyhow!("create workdir: {e}")))?;
 
-    let sock_path = workdir
+    let sock_path = opts
+        .workdir
         .parent()
         .map(|p| p.join("cell.sock"))
-        .unwrap_or_else(|| workdir.join("cell.sock"));
+        .unwrap_or_else(|| opts.workdir.join("cell.sock"));
 
-    let mut child = Command::new(sand_bin)
-        .arg("serve")
+    let mut cmd = Command::new(&opts.sand_bin);
+    cmd.arg("serve")
         .arg("--sock")
         .arg(&sock_path)
         .arg("--mem")
-        .arg(mem_bytes.to_string())
+        .arg(opts.mem_bytes.to_string())
         .arg("--cpu")
-        .arg(cpu.to_string())
+        .arg(opts.cpu.to_string())
         .arg("--pids")
-        .arg(pids.to_string())
+        .arg(opts.pids.to_string())
         .arg("--workdir")
-        .arg(workdir)
-        .arg("--net")
-        .arg("none")
+        .arg(&opts.workdir);
+    if let Some(rootfs) = &opts.rootfs {
+        cmd.arg("--rootfs").arg(rootfs);
+    }
+    if opts.net_veth {
+        cmd.arg("--net").arg("veth");
+        if let Some(egress) = &opts.egress {
+            cmd.arg("--egress").arg(egress);
+        }
+    } else {
+        cmd.arg("--net").arg("none");
+    }
+    let mut child = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .kill_on_drop(true)

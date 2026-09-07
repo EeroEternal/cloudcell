@@ -11,6 +11,7 @@ pub struct Config {
     pub public_url: String,
     pub sand_bin: Option<PathBuf>,
     pub data_dir: PathBuf,
+    pub rootfs_dir: PathBuf,
 }
 
 impl Default for Config {
@@ -28,6 +29,7 @@ impl Default for Config {
             public_url: "http://127.0.0.1:8080".to_string(),
             sand_bin: None,
             data_dir: PathBuf::from("data"),
+            rootfs_dir: PathBuf::from("data/snapshots"),
         }
     }
 }
@@ -68,6 +70,14 @@ impl Config {
             && !dir.is_empty()
         {
             cfg.data_dir = PathBuf::from(dir);
+            if std::env::var("CLOUDCELL_ROOTFS_DIR").is_err() {
+                cfg.rootfs_dir = cfg.data_dir.join("snapshots");
+            }
+        }
+        if let Ok(dir) = std::env::var("CLOUDCELL_ROOTFS_DIR")
+            && !dir.is_empty()
+        {
+            cfg.rootfs_dir = PathBuf::from(dir);
         }
         cfg
     }
