@@ -195,7 +195,11 @@ pub async fn send_code(
     .bind(&expires)
     .execute(&state.db)
     .await?;
-    state.mailer.send_verification_code(&email, &code).await?;
+    if let Err(err) = state.mailer.send_verification_code(&email, &code).await {
+        tracing::warn!(%email, error = %err, "send verification code failed");
+        return Err(err);
+    }
+    tracing::info!(%email, "verification code sent");
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -256,6 +260,7 @@ pub async fn register(
             .fetch_optional(&state.db)
             .await?;
     if stored_hash.as_deref() != Some(&hash_key(code)) {
+        tracing::warn!(%email, "register rejected: invalid or expired code");
         return Err(Error::BadRequest(
             "invalid or expired verification code".into(),
         ));

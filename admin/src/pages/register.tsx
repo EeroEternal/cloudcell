@@ -90,7 +90,14 @@ export default function RegisterPage() {
         navigate("/", { replace: true })
       }
     } catch (err) {
-      toast.error(isConflict(err) ? t("auth.emailTaken") : errorMessage(err, t("common.error")))
+      const message = errorMessage(err, t("common.error"))
+      toast.error(
+        isConflict(err)
+          ? t("auth.emailTaken")
+          : message.toLowerCase().includes("verification code")
+            ? t("auth.codeExpired")
+            : message,
+      )
     } finally {
       setPending(false)
     }

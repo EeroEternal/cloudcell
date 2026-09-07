@@ -61,8 +61,10 @@ export function isConflict(err: unknown): boolean {
 }
 
 export function errorMessage(err: unknown, fallback: string): string {
-  if (isApiError(err) && err.message) return err.message
-  if (err instanceof Error && err.message) return err.message
+  if (typeof err === "object" && err !== null && "message" in err) {
+    const message = (err as { message: unknown }).message
+    if (typeof message === "string" && message.trim()) return message
+  }
   return fallback
 }
 
