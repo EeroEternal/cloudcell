@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { Box, KeyRound, LayoutDashboard, Layers, Play, Settings } from "lucide-react"
+import { Box, KeyRound, LayoutDashboard, Layers, Play } from "lucide-react"
 
 export type NavItem = {
   name: string
@@ -32,10 +32,5 @@ export const NAV_SECTIONS: NavSection[] = [
       { name: "Playground", href: "/playground", icon: Play },
       { name: "API Keys", href: "/keys", icon: KeyRound },
     ],
-  },
-  {
-    id: "system",
-    title: "System",
-    items: [{ name: "Settings", href: "/settings", icon: Settings }],
   },
 ]

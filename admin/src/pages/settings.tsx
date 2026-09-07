@@ -252,43 +252,106 @@ export default function SettingsPage() {
   )
 }
 
+function maskKey(key: string): string {
+  if (!key) return ""
+  if (key.length <= 12) return "••••••••"
+  return `${key.slice(0, 8)}••••`
+}
+
 function ConsoleKeySection() {
-  const [draft, setDraft] = useState(getApiKey)
+  const stored = getApiKey()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(stored)
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<{
+    type: "success" | "error"
+    text: string
+  } | null>(null)
+
+  const startEdit = () => {
+    setDraft(stored)
+    setEditing(true)
+    setSaveMessage(null)
+  }
+
+  const cancelEdit = () => {
+    setDraft(stored)
+    setEditing(false)
+    setSaveMessage(null)
+  }
 
   const save = () => {
+    setSaving(true)
     const next = draft.trim()
     setApiKey(next || null)
-    setDraft(next)
+    setEditing(false)
+    setSaving(false)
+    setSaveMessage({
+      type: "success",
+      text: next
+        ? t("settings.keySaved", "API key stored for this tab")
+        : t("settings.keyCleared", "API key cleared"),
+    })
     toast.success(
       next
         ? t("settings.keySaved", "API key stored for this tab")
         : t("settings.keyCleared", "API key cleared"),
     )
+    setTimeout(() => setSaveMessage(null), 3000)
   }
 
   return (
-    <SectionCard title={t("settings.consoleKey", "Console API key")}>
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "settings.consoleKeyHelp",
-            "Paste the plaintext key shown once at create/rotate. It stays in this browser tab only.",
-          )}
-        </p>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="console-api-key">{t("settings.consoleKey", "Console API key")}</Label>
-          <Input
-            id="console-api-key"
-            type="password"
-            autoComplete="off"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+    <SectionCard
+      title={t("settings.consoleKey", "Console API key")}
+      headerExtra={
+        !editing ? (
+          <Button variant="outline" size="sm" onClick={startEdit} className="h-8 text-xs font-medium">
+            {t("settings.edit", "Edit")}
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={cancelEdit} className="h-8 text-xs">
+            {t("settings.cancel", "Cancel")}
+          </Button>
+        )
+      }
+    >
+      {!editing ? (
+        <div className="rounded-lg border border-border/70 bg-card p-3.5">
+          <div className="text-xs font-medium text-muted-foreground">
+            {t("settings.consoleKey", "Console API key")}
+          </div>
+          <div className="mt-2 font-mono text-sm font-semibold text-foreground">
+            {stored
+              ? maskKey(stored)
+              : t("settings.keyNotSet", "Not set")}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "settings.consoleKeyHelp",
+              "Paste the plaintext key shown once at create/rotate. It stays in this browser tab only.",
+            )}
+          </p>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="console-api-key">{t("settings.consoleKey", "Console API key")}</Label>
+            <Input
+              id="console-api-key"
+              type="password"
+              autoComplete="off"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+          </div>
+          <SettingsSaveBar
+            saving={saving}
+            message={saveMessage}
+            onReset={cancelEdit}
+            onSave={save}
           />
         </div>
-        <div>
-          <Button onClick={save}>{t("settings.saveKey", "Save")}</Button>
-        </div>
-      </div>
+      )}
     </SectionCard>
   )
 }

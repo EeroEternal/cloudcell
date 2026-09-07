@@ -49,6 +49,8 @@ const en = {
     language: "Language",
     chinese: "中文",
     english: "English",
+    settings: "Settings",
+    account: "Account",
   },
 }
 
@@ -97,6 +99,8 @@ const zh: typeof en = {
     language: "语言",
     chinese: "中文",
     english: "English",
+    settings: "设置",
+    account: "账号",
   },
 }
 
