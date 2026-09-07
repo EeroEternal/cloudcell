@@ -33,3 +33,6 @@ Open `http://127.0.0.1:5173`. The Vite dev server proxies `/api` to `:8080`.
 ## Deploy
 
 [`docs/deploy.md`](docs/deploy.md) and [`deploy/gcp/`](deploy/gcp/).
+
+---
+*Created with [OpenHub](https://openhub.run) - Open Agent & Git Platform*
