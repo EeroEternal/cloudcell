@@ -13,3 +13,5 @@ dist/
 node_modules/
 admin/dist/
 *.local
+
+.openhub/
