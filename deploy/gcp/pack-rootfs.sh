@@ -32,6 +32,12 @@ pack_python() {
         sudo mkdir -p "$dest$(dirname "$d")"
         sudo cp -a "$d" "$dest$d"
     done
+    # OpenSSL used by ssl/https
+    for lib in /lib/x86_64-linux-gnu/libssl.so.3 /lib/x86_64-linux-gnu/libcrypto.so.3; do
+        [ -f "$lib" ] || continue
+        sudo mkdir -p "$dest$(dirname "$lib")"
+        sudo cp -anL "$lib" "$dest$lib" 2>/dev/null || true
+    done
 }
 
 echo "packing python-3.12..."
@@ -47,6 +53,32 @@ else
     sudo rm -rf "$OUT/node-22"
     sudo cp -a "$OUT/base" "$OUT/node-22"
 fi
+
+copy_certs() {
+    local dest=$1
+    sudo mkdir -p "$dest/etc" "$dest/usr/lib"
+    if [ -d /etc/ssl ]; then
+        sudo cp -a /etc/ssl "$dest/etc/"
+    fi
+    if [ -e /usr/lib/ssl ]; then
+        sudo cp -a /usr/lib/ssl "$dest/usr/lib/"
+    fi
+    # OpenSSL default verify path on Debian/Ubuntu
+    if [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+        sudo mkdir -p "$dest/etc/ssl/certs"
+        sudo cp -a /etc/ssl/certs/ca-certificates.crt "$dest/etc/ssl/certs/"
+    fi
+    # veth netns cannot use systemd-resolved at 127.0.0.53
+    sudo mkdir -p "$dest/etc"
+    printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' | sudo tee "$dest/etc/resolv.conf" >/dev/null
+    if [ -f /etc/nsswitch.conf ]; then
+        sudo cp -a /etc/nsswitch.conf "$dest/etc/"
+    fi
+}
+
+copy_certs "$OUT/base"
+copy_certs "$OUT/python-3.12"
+copy_certs "$OUT/node-22"
 
 sudo chown -R cloudcell:cloudcell "$OUT" 2>/dev/null || sudo chmod -R a+rX "$OUT"
 echo "snapshots in $OUT:"
