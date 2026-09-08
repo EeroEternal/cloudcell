@@ -104,10 +104,23 @@ export function AuthCardLayout({ activeTab, title, children }: AuthCardLayoutPro
           </h1>
 
           <p
-            className="mb-16 max-w-lg text-lg leading-relaxed text-muted-foreground/80 duration-700 animate-in fade-in slide-in-from-bottom-5"
+            className="mb-8 max-w-lg text-lg leading-relaxed text-muted-foreground/80 duration-700 animate-in fade-in slide-in-from-bottom-5"
             style={revealStyle(200)}
           >
             {t("auth.brandingDescription")}
+          </p>
+
+          <p
+            className="mb-16 max-w-lg text-sm leading-relaxed duration-700 animate-in fade-in slide-in-from-bottom-5"
+            style={revealStyle(250)}
+          >
+            <Link
+              to="/help"
+              className="font-semibold text-primary underline-offset-4 hover:underline"
+            >
+              {t("auth.agentGuide")}
+            </Link>
+            <span className="text-muted-foreground/80"> — {t("auth.agentDocsHint")}</span>
           </p>
 
           <div
@@ -144,10 +157,10 @@ export function AuthCardLayout({ activeTab, title, children }: AuthCardLayoutPro
                   {activeTab === "login" ? t("auth.registerNow") : t("auth.loginNow")}
                 </Link>
               </p>
-              <p className="mt-4 text-sm text-muted-foreground/70">
+              <p className="mt-4 text-sm">
                 <Link
                   to="/help"
-                  className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  className="font-semibold text-primary underline-offset-4 hover:underline"
                 >
                   {t("auth.agentGuide")}
                 </Link>

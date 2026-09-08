@@ -5,6 +5,7 @@ Sandbox-as-a-service for AI agents. Linux jails (namespaces, cgroup, Landlock, s
 Console: https://cloudcell.dev
 API: https://api.cloudcell.dev
 Help (HTML): https://cloudcell.dev/help
+Also published at: https://cloudcell.dev/.well-known/llms.txt
 
 ## Docs (Markdown, no auth)
 
