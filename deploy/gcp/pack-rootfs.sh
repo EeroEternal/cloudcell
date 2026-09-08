@@ -87,16 +87,25 @@ copy_host() {
     local src=$1 dest=$2
     [ -e "$src" ] || return 0
     sudo mkdir -p "$dest$(dirname "$src")"
-    sudo cp -a "$src" "$dest$src"
+    if [ -d "$src" ] && [ ! -L "$src" ]; then
+        sudo cp -a "$src" "$dest$src"
+    else
+        sudo rm -f "$dest$src"
+        sudo cp -aL "$src" "$dest$src" 2>/dev/null || sudo cp -a "$src" "$dest$src"
+    fi
 }
 
 copy_bin() {
     local dest=$1 bin=$2
-    local p
+    local p real
     p=$(type -P "$bin" || true)
     [ -n "$p" ] || return 0
+    real=$(readlink -f "$p")
     copy_host "$p" "$dest"
-    ldd "$p" 2>/dev/null | awk '/=>/ {print $3} /^[[:space:]]*\// {print $1}' | while read -r so; do
+    if [ -n "$real" ] && [ "$real" != "$p" ]; then
+        copy_host "$real" "$dest"
+    fi
+    ldd "$real" 2>/dev/null | awk '/=>/ {print $3} /^[[:space:]]*\// {print $1}' | while read -r so; do
         [ -f "$so" ] || continue
         copy_host "$so" "$dest"
     done
@@ -113,25 +122,37 @@ pack_rust() {
     sudo cp -a "$OUT/base" "$dest"
     local sysroot
     sysroot=$(rustc --print sysroot)
-    sudo mkdir -p "$dest/usr/lib" "$dest/usr/bin"
+    sudo mkdir -p "$dest/usr/lib" "$dest/usr/bin" "$dest/lib64" "$dest/lib/x86_64-linux-gnu" "$dest/usr/lib/x86_64-linux-gnu"
     sudo cp -a "$sysroot" "$dest/usr/lib/rust"
     for b in rustc cargo rustdoc rustfmt clippy-driver; do
-        if [ -x "$dest/usr/lib/rust/bin/$b" ]; then
+        if sudo test -x "$dest/usr/lib/rust/bin/$b"; then
             sudo ln -sfn /usr/lib/rust/bin/$b "$dest/usr/bin/$b"
         fi
     done
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc binutils libc6-dev git >/dev/null
-    for b in gcc cc as ld ar ranlib strip nm objcopy objdump git; do
+    for b in gcc gcc-13 cc as ld ld.bfd ar ranlib strip nm objcopy objdump git; do
         copy_bin "$dest" "$b"
     done
-    local gccver
-    gccver=$(gcc -dumpversion)
-    copy_host "/usr/lib/gcc/x86_64-linux-gnu/$gccver" "$dest"
-    for f in crt1.o crti.o crtn.o Scrt1.o libc.so libc_nonshared.a libm.so libpthread.so libdl.so librt.so; do
-        copy_host "/usr/lib/x86_64-linux-gnu/$f" "$dest"
-    done
-    for lib in /lib/x86_64-linux-gnu/libssl.so.3 /lib/x86_64-linux-gnu/libcrypto.so.3 /lib/x86_64-linux-gnu/libgcc_s.so.1; do
-        copy_host "$lib" "$dest"
+    sudo ln -sfn gcc-13 "$dest/usr/bin/gcc" 2>/dev/null || true
+    sudo ln -sfn gcc "$dest/usr/bin/cc" 2>/dev/null || true
+    copy_host /usr/lib/gcc "$dest"
+    copy_host /usr/libexec/gcc "$dest"
+    # dynamic linker must be a real file, not a dangling symlink
+    copy_host /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 "$dest"
+    sudo rm -f "$dest/lib64/ld-linux-x86-64.so.2"
+    sudo cp -aL /lib64/ld-linux-x86-64.so.2 "$dest/lib64/ld-linux-x86-64.so.2"
+    sudo cp -a /lib/x86_64-linux-gnu/*.so* "$dest/lib/x86_64-linux-gnu/"
+    sudo cp -a /usr/lib/x86_64-linux-gnu/libc.so "$dest/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
+    sudo cp -a /usr/lib/x86_64-linux-gnu/libc_nonshared.a "$dest/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
+    sudo cp -a /usr/lib/x86_64-linux-gnu/*.o "$dest/usr/lib/x86_64-linux-gnu/" 2>/dev/null || true
+    # rust-lld looks for -lpthread/-ldl/... as bare names in /usr/lib
+    sudo cp -aL /lib/x86_64-linux-gnu/libpthread.so.0 "$dest/usr/lib/libpthread.so"
+    sudo cp -aL /lib/x86_64-linux-gnu/libdl.so.2 "$dest/usr/lib/libdl.so"
+    sudo cp -aL /lib/x86_64-linux-gnu/librt.so.1 "$dest/usr/lib/librt.so"
+    sudo cp -aL /lib/x86_64-linux-gnu/libutil.so.1 "$dest/usr/lib/libutil.so"
+    ldd "$sysroot/bin/rustc" "$sysroot/bin/cargo" 2>/dev/null | awk '/=>/ {print $3}' | sort -u | while read -r so; do
+        [ -f "$so" ] || continue
+        copy_host "$so" "$dest"
     done
 }
 
