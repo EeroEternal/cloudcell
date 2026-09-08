@@ -74,7 +74,13 @@ export function AuthCardLayout({ activeTab, title, children }: AuthCardLayoutPro
 
   return (
     <div className="flex min-h-screen overflow-hidden bg-background">
-      <div className="absolute right-4 top-4 z-50">
+      <div className="absolute right-4 top-4 z-50 flex items-center gap-3">
+        <Link
+          to="/help"
+          className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          {t("auth.agentGuide")}
+        </Link>
         <LanguageSwitcher />
       </div>
 
@@ -142,13 +148,6 @@ export function AuthCardLayout({ activeTab, title, children }: AuthCardLayoutPro
                   className="ml-2 font-semibold text-primary underline-offset-4 hover:underline"
                 >
                   {activeTab === "login" ? t("auth.registerNow") : t("auth.loginNow")}
-                </Link>
-                <span className="mx-2 text-border">·</span>
-                <Link
-                  to="/help"
-                  className="font-semibold text-primary underline-offset-4 hover:underline"
-                >
-                  {t("auth.agentGuide")}
                 </Link>
               </p>
             </div>
