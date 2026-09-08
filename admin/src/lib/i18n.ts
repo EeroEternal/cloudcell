@@ -43,7 +43,6 @@ const en = {
     hidePassword: "Hide password",
     signOut: "Sign out",
     agentGuide: "Agent guide",
-    agentDocsHint: "Agents: /llms.txt and /docs/guide.md — no login.",
   },
   help: {
     title: "Help",
@@ -103,7 +102,6 @@ const zh: typeof en = {
     hidePassword: "隐藏密码",
     signOut: "退出",
     agentGuide: "Agent 指南",
-    agentDocsHint: "Agent：直接读 /llms.txt 和 /docs/guide.md，不用登录。",
   },
   help: {
     title: "帮助",
