@@ -4,6 +4,7 @@ Sandbox-as-a-service control plane on [AgentCell](https://github.com/EeroEternal
 
 - Console: `https://cloudcell.dev` (Cloudflare Pages, `admin/`)
 - API: `https://api.cloudcell.dev` (GCP VM + Cloudflare Tunnel)
+- Agent docs: `https://cloudcell.dev/llms.txt` (HTML: `/help`, Markdown: `/docs/guide.md`)
 
 Sandboxes and API keys persist in SQLite. First `POST /api/v1/keys` bootstraps auth. On a Linux node set `CLOUDCELL_SAND` to the AgentCell `sand` binary to spawn `sand serve` and exec over its unix socket; otherwise exec returns 501. See [`docs/sandbox.md`](docs/sandbox.md).
 

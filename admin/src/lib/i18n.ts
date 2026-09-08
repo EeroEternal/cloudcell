@@ -42,6 +42,14 @@ const en = {
     showPassword: "Show password",
     hidePassword: "Hide password",
     signOut: "Sign out",
+    agentGuide: "Agent guide",
+  },
+  help: {
+    title: "Help",
+    guide: "Guide",
+    changelog: "Changelog",
+    raw: "Markdown source",
+    console: "Console",
   },
   common: {
     error: "Request failed",
@@ -51,6 +59,7 @@ const en = {
     english: "English",
     settings: "Settings",
     account: "Account",
+    help: "Help",
   },
 }
 
@@ -92,6 +101,14 @@ const zh: typeof en = {
     showPassword: "显示密码",
     hidePassword: "隐藏密码",
     signOut: "退出",
+    agentGuide: "Agent 指南",
+  },
+  help: {
+    title: "帮助",
+    guide: "使用说明",
+    changelog: "更新日志",
+    raw: "Markdown 原文",
+    console: "控制台",
   },
   common: {
     error: "请求失败",
@@ -101,6 +118,7 @@ const zh: typeof en = {
     english: "English",
     settings: "设置",
     account: "账号",
+    help: "帮助",
   },
 }
 

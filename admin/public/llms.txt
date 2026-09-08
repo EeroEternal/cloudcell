@@ -1,0 +1,14 @@
+# Cloudcell
+
+Sandbox-as-a-service for AI agents. Linux jails (namespaces, cgroup, Landlock, seccomp) via AgentCell `sand`. No Docker.
+
+Console: https://cloudcell.dev
+API: https://api.cloudcell.dev
+Help (HTML): https://cloudcell.dev/help
+
+## Docs (Markdown, no auth)
+
+- [How to use](https://cloudcell.dev/docs/guide.md): auth, snapshots, create/exec/delete
+- [Changelog](https://cloudcell.dev/docs/changelog.md): what shipped
+
+Prefer these `.md` files over scraping the HTML page.

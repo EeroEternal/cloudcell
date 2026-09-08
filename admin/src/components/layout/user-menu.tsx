@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { LogOut, Settings, UserCircle } from "lucide-react"
+import { CircleHelp, LogOut, Settings, UserCircle } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -67,6 +67,10 @@ export function UserMenu() {
           <DropdownMenuItem className="justify-start" onClick={() => navigate("/settings")}>
             <Settings className="mr-2 h-4 w-4" />
             <span>{t("common.settings")}</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem className="justify-start" onClick={() => navigate("/help")}>
+            <CircleHelp className="mr-2 h-4 w-4" />
+            <span>{t("common.help")}</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

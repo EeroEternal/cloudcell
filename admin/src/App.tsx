@@ -10,6 +10,7 @@ import RegisterPage from "@/pages/register"
 import SandboxesPage from "@/pages/sandboxes"
 import SettingsPage from "@/pages/settings"
 import SnapshotsPage from "@/pages/snapshots"
+import HelpPage from "@/pages/help"
 
 function RequireAuth() {
   if (!getSession()) return <Navigate to="/login" replace />
@@ -25,6 +26,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="help" element={<HelpPage />} />
         <Route element={<AuthOnly />}>
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />

@@ -144,6 +144,14 @@ export function AuthCardLayout({ activeTab, title, children }: AuthCardLayoutPro
                   {activeTab === "login" ? t("auth.registerNow") : t("auth.loginNow")}
                 </Link>
               </p>
+              <p className="mt-4 text-sm text-muted-foreground/70">
+                <Link
+                  to="/help"
+                  className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  {t("auth.agentGuide")}
+                </Link>
+              </p>
             </div>
           </div>
         </div>
