@@ -33,6 +33,12 @@ pub fn catalog() -> Vec<Snapshot> {
             language: "javascript".into(),
             status: "declared",
         },
+        Snapshot {
+            id: "rust".into(),
+            name: "rust".into(),
+            language: "rust".into(),
+            status: "declared",
+        },
     ]
 }
 

@@ -6,10 +6,13 @@ OUT="${CLOUDCELL_ROOTFS_DIR:-/var/lib/cloudcell/snapshots}"
 BUILD="$AGENTCELL/os/cell-root/build.sh"
 
 [ -x "$BUILD" ] || { echo "missing $BUILD" >&2; exit 1; }
+ONLY="${ONLY:-}"
 sudo mkdir -p "$OUT"
 
-echo "packing base..."
-sudo "$BUILD" --minimal "$OUT/base"
+if [ -z "$ONLY" ] || [ "$ONLY" = "base" ] || [ ! -d "$OUT/base" ]; then
+    echo "packing base..."
+    sudo "$BUILD" --minimal "$OUT/base"
+fi
 
 pack_python() {
     local dest=$1
@@ -40,9 +43,12 @@ pack_python() {
     done
 }
 
+if [ -z "$ONLY" ] || [ "$ONLY" = "python-3.12" ]; then
 echo "packing python-3.12..."
 pack_python "$OUT/python-3.12"
+fi
 
+if [ -z "$ONLY" ] || [ "$ONLY" = "node-22" ]; then
 if type -P node >/dev/null; then
     echo "packing node-22 from host node..."
     sudo rm -rf "$OUT/node-22"
@@ -52,6 +58,7 @@ else
     echo "no node on host; node-22 snapshot = base"
     sudo rm -rf "$OUT/node-22"
     sudo cp -a "$OUT/base" "$OUT/node-22"
+fi
 fi
 
 copy_certs() {
@@ -76,10 +83,66 @@ copy_certs() {
     fi
 }
 
-copy_certs "$OUT/base"
-copy_certs "$OUT/python-3.12"
-copy_certs "$OUT/node-22"
+copy_host() {
+    local src=$1 dest=$2
+    [ -e "$src" ] || return 0
+    sudo mkdir -p "$dest$(dirname "$src")"
+    sudo cp -a "$src" "$dest$src"
+}
+
+copy_bin() {
+    local dest=$1 bin=$2
+    local p
+    p=$(type -P "$bin" || true)
+    [ -n "$p" ] || return 0
+    copy_host "$p" "$dest"
+    ldd "$p" 2>/dev/null | awk '/=>/ {print $3} /^[[:space:]]*\// {print $1}' | while read -r so; do
+        [ -f "$so" ] || continue
+        copy_host "$so" "$dest"
+    done
+}
+
+pack_rust() {
+    local dest=$1
+    command -v rustc >/dev/null || {
+        echo "rustc not on PATH; skip rust snapshot" >&2
+        return 0
+    }
+    echo "packing rust from $(rustc --print sysroot) ..."
+    sudo rm -rf "$dest"
+    sudo cp -a "$OUT/base" "$dest"
+    local sysroot
+    sysroot=$(rustc --print sysroot)
+    sudo mkdir -p "$dest/usr/lib" "$dest/usr/bin"
+    sudo cp -a "$sysroot" "$dest/usr/lib/rust"
+    for b in rustc cargo rustdoc rustfmt clippy-driver; do
+        if [ -x "$dest/usr/lib/rust/bin/$b" ]; then
+            sudo ln -sfn /usr/lib/rust/bin/$b "$dest/usr/bin/$b"
+        fi
+    done
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc binutils libc6-dev git >/dev/null
+    for b in gcc cc as ld ar ranlib strip nm objcopy objdump git; do
+        copy_bin "$dest" "$b"
+    done
+    local gccver
+    gccver=$(gcc -dumpversion)
+    copy_host "/usr/lib/gcc/x86_64-linux-gnu/$gccver" "$dest"
+    for f in crt1.o crti.o crtn.o Scrt1.o libc.so libc_nonshared.a libm.so libpthread.so libdl.so librt.so; do
+        copy_host "/usr/lib/x86_64-linux-gnu/$f" "$dest"
+    done
+    for lib in /lib/x86_64-linux-gnu/libssl.so.3 /lib/x86_64-linux-gnu/libcrypto.so.3 /lib/x86_64-linux-gnu/libgcc_s.so.1; do
+        copy_host "$lib" "$dest"
+    done
+}
+
+[ -d "$OUT/base" ] && copy_certs "$OUT/base"
+[ -d "$OUT/python-3.12" ] && copy_certs "$OUT/python-3.12"
+[ -d "$OUT/node-22" ] && copy_certs "$OUT/node-22"
+if [ -z "$ONLY" ] || [ "$ONLY" = "rust" ]; then
+    pack_rust "$OUT/rust"
+    copy_certs "$OUT/rust"
+fi
 
 sudo chown -R cloudcell:cloudcell "$OUT" 2>/dev/null || sudo chmod -R a+rX "$OUT"
 echo "snapshots in $OUT:"
-sudo du -sh "$OUT/base" "$OUT/python-3.12" "$OUT/node-22"
+sudo du -sh "$OUT/base" "$OUT/python-3.12" "$OUT/node-22" "$OUT/rust" 2>/dev/null || true

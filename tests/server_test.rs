@@ -303,8 +303,9 @@ async fn test_snapshot_catalog_requires_auth() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let json = json_body(response).await;
-    assert_eq!(json.as_array().unwrap().len(), 3);
+    assert_eq!(json.as_array().unwrap().len(), 4);
     assert_eq!(json[0]["status"], "declared");
+    assert!(json.as_array().unwrap().iter().any(|s| s["id"] == "rust"));
 }
 
 #[tokio::test]
