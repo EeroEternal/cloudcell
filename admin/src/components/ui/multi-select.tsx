@@ -2,6 +2,7 @@ import * as React from "react"
 import { Check, ChevronDown, X } from "lucide-react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { useDialogPortalContainer } from "@/components/ui/dialog-portal-context"
+import { t, useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 interface MultiSelectOption {
@@ -29,11 +30,13 @@ export function MultiSelect({
   options,
   value,
   onChange,
-  placeholder = "Select options...",
+  placeholder,
   className,
   triggerHeightClassName = "h-10",
   side = "top",
 }: MultiSelectProps) {
+  useI18n()
+  const resolvedPlaceholder = placeholder ?? t("common.selectOptions")
   const [open, setOpen] = React.useState(false)
   const dialogPortal = useDialogPortalContainer()
   const triggerRef = React.useRef<HTMLDivElement>(null)
@@ -184,7 +187,7 @@ export function MultiSelect({
                 </span>
               ))
             ) : (
-              <span className="truncate text-muted-foreground">{placeholder}</span>
+              <span className="truncate text-muted-foreground">{resolvedPlaceholder}</span>
             )}
           </div>
           <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
