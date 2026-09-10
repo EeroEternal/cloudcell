@@ -5,8 +5,10 @@ import { SiteHeader } from "./header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { PageLoading } from "@/components/ui/page-loading"
 import { Toaster } from "@/components/ui/sonner"
+import { useI18n } from "@/lib/i18n"
 
 export function DashboardLayout() {
+  useI18n()
   return (
     <SidebarProvider>
       <AppSidebar />

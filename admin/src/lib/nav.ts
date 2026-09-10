@@ -20,17 +20,17 @@ export const APP_TITLE = "Cloudcell"
 export const NAV_SECTIONS: NavSection[] = [
   {
     id: "overview",
-    title: "Overview",
-    items: [{ name: "Dashboard", href: "/", icon: LayoutDashboard }],
+    title: "nav.overview",
+    items: [{ name: "nav.dashboard", href: "/", icon: LayoutDashboard }],
   },
   {
     id: "operate",
-    title: "Operate",
+    title: "nav.operate",
     items: [
-      { name: "Sandboxes", href: "/sandboxes", icon: Box },
-      { name: "Snapshots", href: "/snapshots", icon: Layers },
-      { name: "Playground", href: "/playground", icon: Play },
-      { name: "API Keys", href: "/keys", icon: KeyRound },
+      { name: "nav.sandboxes", href: "/sandboxes", icon: Box },
+      { name: "nav.snapshots", href: "/snapshots", icon: Layers },
+      { name: "nav.playground", href: "/playground", icon: Play },
+      { name: "nav.keys", href: "/keys", icon: KeyRound },
     ],
   },
 ]

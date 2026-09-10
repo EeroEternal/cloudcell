@@ -112,7 +112,7 @@ export default function SandboxesPage() {
       toast.success(t("sandboxes.created", "Sandbox recorded"))
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "create failed")
+      toast.error(err instanceof Error ? err.message : t("common.createFailed"))
     } finally {
       setCreating(false)
     }
@@ -126,7 +126,7 @@ export default function SandboxesPage() {
       setDeleteId(null)
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "delete failed")
+      toast.error(err instanceof Error ? err.message : t("common.deleteFailed"))
     }
   }
 
@@ -170,7 +170,7 @@ export default function SandboxesPage() {
                 ]}
               />
             }
-            resultCount={t("sandboxes.count", `${filtered.length} items`)}
+            resultCount={t("common.itemCount", undefined, { n: filtered.length })}
           />
           <Table className="table-fixed">
             <TableHeader className="sticky top-0 bg-card">

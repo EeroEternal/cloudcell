@@ -2,7 +2,7 @@ import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Check } from "lucide-react"
-import { t } from "@/lib/i18n"
+import { t, useI18n } from "@/lib/i18n"
 
 interface SelectOption {
   value: string
@@ -52,7 +52,7 @@ const Select = ({
   value,
   onChange,
   options,
-  placeholder = t('common.selectPlaceholder'),
+  placeholder,
   className,
   triggerClassName,
   icon,
@@ -61,6 +61,7 @@ const Select = ({
   emptyText,
   disabled,
 }: SelectProps) => {
+  useI18n()
   return (
     <SelectPrimitive.Root value={value} onValueChange={onChange} disabled={disabled}>
       <div className={cn("relative", className)}>
@@ -75,7 +76,7 @@ const Select = ({
             {icon}
             <SelectPrimitive.Value
               className="block truncate"
-              placeholder={placeholder}
+              placeholder={placeholder ?? t("common.selectPlaceholder")}
             />
           </div>
           <SelectPrimitive.Icon asChild>

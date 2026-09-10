@@ -11,7 +11,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { t } from "@/lib/i18n"
+import { t, useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { SelectOption } from "@/components/ui/select"
 
@@ -31,14 +31,17 @@ export function SearchableSelect({
   value,
   onChange,
   options,
-  placeholder = t("common.selectPlaceholder"),
-  searchPlaceholder = t("common.search", "Search..."),
+  placeholder,
+  searchPlaceholder,
   emptyText,
   className,
   triggerClassName,
   disabled,
 }: SearchableSelectProps) {
+  useI18n()
   const [open, setOpen] = useState(false)
+  const resolvedPlaceholder = placeholder ?? t("common.selectPlaceholder")
+  const resolvedSearch = searchPlaceholder ?? t("common.search")
 
   const selectedLabel = useMemo(
     () => options.find((option) => option.value === value)?.label,
@@ -67,7 +70,7 @@ export function SearchableSelect({
               triggerClassName,
             )}
           >
-            <span className="min-w-0 flex-1 truncate">{selectedLabel || placeholder}</span>
+            <span className="min-w-0 flex-1 truncate">{selectedLabel || resolvedPlaceholder}</span>
             <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -77,7 +80,7 @@ export function SearchableSelect({
         align="start"
       >
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={resolvedSearch} />
           <CommandList>
             <CommandEmpty>{emptyText || t("common.empty")}</CommandEmpty>
             <CommandGroup className="max-h-60 overflow-y-auto">

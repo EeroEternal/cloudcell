@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
-import { t } from "@/lib/i18n"
+import { t, useI18n } from "@/lib/i18n"
 
 interface PaginationProps {
   currentPage: number
@@ -22,14 +22,16 @@ export function Pagination({
   onPageSizeChange,
   disabled = false,
 }: PaginationProps) {
+  useI18n()
   const [jumpPage, setJumpPage] = useState("")
   const totalPages = Math.ceil(totalCount / pageSize)
   const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1
   const endItem = Math.min(currentPage * pageSize, totalCount)
-  const summary = t("common.paginationSummary")
-    .replace("{start}", String(startItem))
-    .replace("{end}", String(endItem))
-    .replace("{total}", String(totalCount))
+  const summary = t("common.paginationSummary", undefined, {
+    from: startItem,
+    to: endItem,
+    total: totalCount,
+  })
 
   const getPageNumbers = () => {
     const pages: (number | "ellipsis")[] = []

@@ -1,6 +1,7 @@
 import { PageActionBar } from "@/common/page-action-bar"
 import { Button } from "@/components/ui/button"
 import { Loader2, RefreshCw, Save } from "lucide-react"
+import { t } from "@/lib/i18n"
 
 interface SettingsSaveBarProps {
   saving: boolean
@@ -16,8 +17,8 @@ export function SettingsSaveBar({
   message,
   onReset,
   onSave,
-  resetLabel = "Cancel",
-  saveLabel = "Save Changes",
+  resetLabel,
+  saveLabel,
 }: SettingsSaveBarProps) {
   return (
     <PageActionBar
@@ -28,7 +29,7 @@ export function SettingsSaveBar({
           className="h-9 px-4"
         >
           <RefreshCw className="h-4 w-4 mr-2" />
-          {resetLabel}
+          {resetLabel ?? t("common.cancel")}
         </Button>
       }
       trailing={
@@ -50,7 +51,7 @@ export function SettingsSaveBar({
             className="h-9 px-6"
           >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {saveLabel}
+            {saveLabel ?? t("common.save")}
           </Button>
         </>
       }

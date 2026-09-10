@@ -83,7 +83,7 @@ export default function KeysPage() {
       setRevealed(created)
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "create failed")
+      toast.error(err instanceof Error ? err.message : t("common.createFailed"))
     } finally {
       setSaving(false)
     }
@@ -100,7 +100,7 @@ export default function KeysPage() {
       setRevealed(created)
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "rotate failed")
+      toast.error(err instanceof Error ? err.message : t("common.rotateFailed"))
     }
   }
 
@@ -112,7 +112,7 @@ export default function KeysPage() {
       toast.success(t("keys.deleted", "API key deleted"))
       await load()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "delete failed")
+      toast.error(err instanceof Error ? err.message : t("common.deleteFailed"))
     }
   }
 
@@ -167,7 +167,7 @@ export default function KeysPage() {
                 ]}
               />
             }
-            resultCount={t("keys.count", `${filtered.length} items`)}
+            resultCount={t("common.itemCount", undefined, { n: filtered.length })}
           />
           <Table className="table-fixed">
             <TableHeader className="sticky top-0 bg-card">

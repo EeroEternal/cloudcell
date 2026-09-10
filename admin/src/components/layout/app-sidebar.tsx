@@ -15,6 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { APP_TITLE, NAV_SECTIONS, type NavItem, type NavSection } from "@/lib/nav"
+import { t } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 const SECTION_PREVIEW_COUNT = 3
@@ -66,16 +67,17 @@ function NavSectionGroup({
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel className="text-sidebar-foreground/85">{section.title}</SidebarGroupLabel>
+      <SidebarGroupLabel className="text-sidebar-foreground/85">{t(section.title)}</SidebarGroupLabel>
       <SidebarMenu>
         {visibleItems.map((item) => {
           const isActive = pathname === item.href
+          const label = t(item.name)
           return (
             <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild tooltip={item.name} isActive={isActive}>
+              <SidebarMenuButton asChild tooltip={label} isActive={isActive}>
                 <Link to={item.href} className={cn("flex items-center gap-3")}>
                   <item.icon className="size-4" />
-                  <span>{item.name}</span>
+                  <span>{label}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -85,12 +87,12 @@ function NavSectionGroup({
           <SidebarMenuItem>
             <SidebarMenuButton
               type="button"
-              tooltip={expanded ? "Show less" : "Show more"}
+              tooltip={expanded ? t("nav.showLess") : t("nav.showMore")}
               onClick={toggleExpanded}
               className="text-sidebar-foreground/80"
             >
               {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-              <span>{expanded ? "Show less" : "Show more"}</span>
+              <span>{expanded ? t("nav.showLess") : t("nav.showMore")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         ) : null}

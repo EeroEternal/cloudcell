@@ -41,7 +41,8 @@ export default function PlaygroundPage() {
       const trailer = result.code === 0 ? "" : `\n[exit ${result.code}]`
       setOutput(`${result.stdout}${trailer}`)
     } catch (err) {
-      const message = err instanceof ApiError || err instanceof Error ? err.message : "exec failed"
+      const message =
+        err instanceof ApiError || err instanceof Error ? err.message : t("common.execFailed")
       setOutput(message)
     } finally {
       setRunning(false)

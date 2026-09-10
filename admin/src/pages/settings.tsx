@@ -28,11 +28,13 @@ const INITIAL_CONFIG: GeneralConfig = {
   rateLimitPerMinute: 60,
 }
 
-const SECTIONS: SettingsSection[] = [
-  { id: "general", label: "General", icon: Globe },
-  { id: "security", label: "Security & Policy", icon: Shield },
-  { id: "api-tokens", label: "Service Credentials", icon: KeyRound },
-]
+function settingsSections(): SettingsSection[] {
+  return [
+    { id: "general", label: t("settings.general"), icon: Globe },
+    { id: "security", label: t("settings.security"), icon: Shield },
+    { id: "api-tokens", label: t("settings.credentials"), icon: KeyRound },
+  ]
+}
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("general")
@@ -91,11 +93,11 @@ export default function SettingsPage() {
   return (
     <PageShell className="overflow-y-auto">
       <PageContainer className="max-w-[1100px] pb-8 gap-4">
-        <PageHeader title="Settings" className="mb-0" />
+        <PageHeader title={t("settings.title")} className="mb-0" />
 
         <div className="flex flex-col gap-4">
           <SettingsSectionNav
-            sections={SECTIONS}
+            sections={settingsSections()}
             activeSection={activeSection}
             onSectionChange={handleSectionChange}
           />
@@ -103,11 +105,9 @@ export default function SettingsPage() {
           <div className="w-full space-y-4">
             {activeSection === "general" && (
               <SectionCard
-                title="General Configuration"
+                title={t("settings.generalTitle")}
                 description={
-                  !isEditing
-                    ? "Read-only overview of current system parameters."
-                    : "Configure global system parameters and operational defaults."
+                  !isEditing ? t("settings.generalView") : t("settings.generalEdit")
                 }
                 headerExtra={
                   <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ export default function SettingsPage() {
                         className="h-8 gap-1.5 text-xs font-medium"
                       >
                         <Sliders className="h-3.5 w-3.5 text-primary" />
-                        Edit Settings
+                        {t("common.edit")}
                       </Button>
                     ) : (
                       <Button
@@ -129,12 +129,12 @@ export default function SettingsPage() {
                         className="h-8 gap-1.5 text-xs"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                        Cancel Edit
+                        {t("common.cancelEdit")}
                       </Button>
                     )}
                     <div className="flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
                       <div className="h-1.5 w-1.5 rounded-full bg-success" />
-                      Active
+                      {t("common.active")}
                     </div>
                   </div>
                 }
@@ -145,7 +145,7 @@ export default function SettingsPage() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       <div className="flex flex-col justify-between rounded-lg border border-border/70 bg-card p-3.5 shadow-sm">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="font-medium">Site Title</span>
+                          <span className="font-medium">{t("settings.siteTitle")}</span>
                           <Globe className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div className="mt-2 text-sm font-semibold text-foreground truncate">
@@ -155,17 +155,17 @@ export default function SettingsPage() {
 
                       <div className="flex flex-col justify-between rounded-lg border border-border/70 bg-card p-3.5 shadow-sm">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="font-medium">Registration</span>
+                          <span className="font-medium">{t("settings.registration")}</span>
                           <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div className="mt-2 text-sm font-semibold text-foreground">
-                          {config.registrationEnabled ? "Enabled" : "Disabled"}
+                          {config.registrationEnabled ? t("common.enabled") : t("common.disabled")}
                         </div>
                       </div>
 
                       <div className="flex flex-col justify-between rounded-lg border border-border/70 bg-card p-3.5 shadow-sm">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="font-medium">Rate Limit</span>
+                          <span className="font-medium">{t("settings.rateLimit")}</span>
                           <Shield className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                         <div className="mt-2 text-sm font-semibold text-foreground">
@@ -179,7 +179,7 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="siteTitle" className="text-xs font-medium">Site Title</Label>
+                        <Label htmlFor="siteTitle" className="text-xs font-medium">{t("settings.siteTitle")}</Label>
                         <Input
                           id="siteTitle"
                           value={draftConfig.siteTitle}
@@ -191,7 +191,7 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="rateLimit" className="text-xs font-medium">Rate Limit (req/min)</Label>
+                        <Label htmlFor="rateLimit" className="text-xs font-medium">{t("settings.rateLimitField")}</Label>
                         <Input
                           id="rateLimit"
                           type="number"
@@ -209,8 +209,8 @@ export default function SettingsPage() {
 
                     <div className="pt-2">
                       <SettingsToggleRow
-                        label="User Registration"
-                        description="Allow new operators and developers to register self-service accounts."
+                        label={t("settings.registrationToggle")}
+                        description={t("settings.registrationHelp")}
                         checked={draftConfig.registrationEnabled}
                         onCheckedChange={(checked) =>
                           setDraftConfig({ ...draftConfig, registrationEnabled: checked })
@@ -223,11 +223,11 @@ export default function SettingsPage() {
             )}
 
             {activeSection === "security" && (
-              <SectionCard title="Security & Policy" description="System-wide security safeguards and authentication posture.">
+              <SectionCard title={t("settings.securityTitle")} description={t("settings.securityDesc")}>
                 <div className="space-y-3">
                   <SettingsToggleRow
-                    label="Maintenance Mode"
-                    description="Temporarily pause public data ingress while keeping the admin console accessible."
+                    label={t("settings.maintenance")}
+                    description={t("settings.maintenanceHelp")}
                     checked={config.maintenanceMode}
                     onCheckedChange={(checked) => setConfig({ ...config, maintenanceMode: checked })}
                   />
@@ -313,7 +313,7 @@ function ConsoleKeySection() {
               className="h-8 gap-1.5 text-xs font-medium"
             >
               <Sliders className="h-3.5 w-3.5 text-primary" />
-              Edit Settings
+              {t("common.edit")}
             </Button>
           ) : (
             <Button
@@ -323,12 +323,12 @@ function ConsoleKeySection() {
               className="h-8 gap-1.5 text-xs"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              Cancel Edit
+              {t("common.cancelEdit")}
             </Button>
           )}
           <div className="flex items-center gap-1.5 rounded-full border border-success/20 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
             <div className="h-1.5 w-1.5 rounded-full bg-success" />
-            Active
+            {t("common.active")}
           </div>
         </div>
       }
