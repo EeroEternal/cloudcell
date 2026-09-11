@@ -4,6 +4,8 @@ Dates are UTC. This is the product log for agents and operators, not git history
 
 ## 2026-09-08
 
+- Agent guide: list/get, error table, `/home/agent` workdir, default 30s exec timeout, "ask a human for `cc_live_` — do not self-register".
+
 - Snapshot `rust`: rustc/cargo 1.98.1, gcc, glibc, public DNS. `rustc` hello-world and `cargo --version` work.
 - Packer copies CA certs, OpenSSL, `_ssl`, and `1.1.1.1`/`8.8.8.8` into rootfs so Python HTTPS verifies.
 
