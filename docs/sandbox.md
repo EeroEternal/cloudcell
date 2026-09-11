@@ -11,6 +11,8 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 | GET/POST | `/api/v1/sandboxes` | Per-user SQLite records. Create is **`pending`** unless `CLOUDCELL_SAND` starts `sand serve` (**`running`**). |
 | GET/DELETE | `/api/v1/sandboxes/{id}` | Owner-only lookup / delete (SIGTERM the cell if live). Other users get 404. |
 | POST | `/api/v1/sandboxes/{id}/exec` | AgentCell serve protocol when a live cell exists; otherwise **501** / **409** |
+| GET | `/api/v1/sandboxes/{id}/stream` | WebSocket duplex stdio stream (AgentCell serve protocol v2 / ACP bridge) |
+| GET | `/api/v1/sandboxes/{id}/acp` | Alias for `/stream` defaulting to `argv=["zene","acp"]` |
 | GET | `/api/v1/snapshots` | Static catalog (`base`, `python-3.12`, `node-22`, `rust`), status **`declared`** |
 | GET/POST | `/api/v1/keys` | Per-user. Create returns plaintext **once**; store is SHA-256 only |
 | DELETE | `/api/v1/keys/{id}` | Immediate invalidate |

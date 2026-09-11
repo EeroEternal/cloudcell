@@ -25,6 +25,7 @@ anyhow = "1.0"
 thiserror = "2.0"
 sha2 = "0.10"
 argon2 = { version = "0.5", features = ["std"] }
+futures-util = "0.3"
 
 [dev-dependencies]
 tokio-test = "0.4"

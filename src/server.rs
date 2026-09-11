@@ -31,6 +31,11 @@ pub fn create_router(state: AppState) -> Router {
             get(sandbox::get_sandbox).delete(sandbox::delete_sandbox),
         )
         .route("/api/v1/sandboxes/{id}/exec", post(sandbox::exec_sandbox))
+        .route(
+            "/api/v1/sandboxes/{id}/stream",
+            get(sandbox::stream_sandbox),
+        )
+        .route("/api/v1/sandboxes/{id}/acp", get(sandbox::stream_sandbox))
         .route("/api/v1/snapshots", get(snapshot::list_snapshots))
         .route("/api/v1/auth/status", get(account::status))
         .route("/api/v1/auth/register", post(account::register))

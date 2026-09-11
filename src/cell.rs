@@ -142,6 +142,23 @@ async fn exec_inner(sock: &Path, argv: &[String], stdin: &[u8]) -> Result<(Vec<u
     Ok((reply, code))
 }
 
+pub struct CellStream {
+    pub reader: tokio::net::unix::OwnedReadHalf,
+    pub writer: tokio::net::unix::OwnedWriteHalf,
+}
+
+pub async fn connect_stream(sock: &Path, argv: &[String]) -> Result<CellStream> {
+    let mut stream = UnixStream::connect(sock)
+        .await
+        .map_err(|e| Error::Internal(anyhow::anyhow!("connect cell socket: {e}")))?;
+    stream
+        .write_all(&encode_argv(argv))
+        .await
+        .map_err(|e| Error::Internal(anyhow::anyhow!("write argv: {e}")))?;
+    let (reader, writer) = stream.into_split();
+    Ok(CellStream { reader, writer })
+}
+
 async fn spawn_sand(opts: SpawnOpts) -> Result<CellHandle> {
     tokio::fs::create_dir_all(&opts.workdir)
         .await
@@ -303,6 +320,56 @@ mod tests {
         .unwrap();
         assert_eq!(out, b"hello-from-cell");
         assert_eq!(code, 7);
+        server.await.unwrap();
+        let _ = std::fs::remove_file(&sock);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[tokio::test]
+    async fn connect_stream_duplex_against_fake_cell() {
+        let dir = std::env::temp_dir().join(format!(
+            "cloudcell-stream-sock-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("cell.sock");
+        let _ = std::fs::remove_file(&sock);
+        let listener = UnixListener::bind(&sock).unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut argc_buf = [0u8; 4];
+            stream.read_exact(&mut argc_buf).await.unwrap();
+            let argc = u32::from_le_bytes(argc_buf);
+            assert_eq!(argc, 2);
+
+            // Read 2 args
+            for _ in 0..argc {
+                let mut len_buf = [0u8; 4];
+                stream.read_exact(&mut len_buf).await.unwrap();
+                let len = u32::from_le_bytes(len_buf) as usize;
+                let mut arg_buf = vec![0u8; len];
+                stream.read_exact(&mut arg_buf).await.unwrap();
+            }
+
+            // Duplex echo: read line, send reply
+            let mut buf = [0u8; 100];
+            let n = stream.read(&mut buf).await.unwrap();
+            assert_eq!(&buf[..n], b"ping\n");
+            stream.write_all(b"pong\n").await.unwrap();
+        });
+
+        let mut cell_stream = connect_stream(&sock, &["zene".into(), "acp".into()])
+            .await
+            .unwrap();
+
+        cell_stream.writer.write_all(b"ping\n").await.unwrap();
+        let mut resp = [0u8; 5];
+        cell_stream.reader.read_exact(&mut resp).await.unwrap();
+        assert_eq!(&resp, b"pong\n");
+
         server.await.unwrap();
         let _ = std::fs::remove_file(&sock);
         let _ = std::fs::remove_dir(&dir);

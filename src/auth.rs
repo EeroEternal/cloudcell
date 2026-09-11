@@ -40,11 +40,11 @@ pub async fn require_api_key(
         return next.run(request).await;
     }
 
-    let Some(token) = bearer_token(request.headers()) else {
+    let Some(token) = extract_token(&request) else {
         return Error::Unauthorized("missing bearer token".into()).into_response();
     };
 
-    match resolve_user(&state, token).await {
+    match resolve_user(&state, &token).await {
         Ok(Some(user)) => {
             request.extensions_mut().insert(user);
             next.run(request).await
@@ -65,6 +65,23 @@ fn is_public(method: &Method, path: &str) -> bool {
             | (&Method::POST, "/api/v1/auth/send-code")
             | (&Method::POST, "/api/v1/auth/verify-code")
     )
+}
+
+fn extract_token(request: &Request) -> Option<String> {
+    if let Some(token) = bearer_token(request.headers()) {
+        return Some(token.to_string());
+    }
+    if let Some(query) = request.uri().query() {
+        for pair in query.split('&') {
+            if let Some((k, v)) = pair.split_once('=')
+                && k == "token"
+                && !v.is_empty()
+            {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn bearer_token(headers: &axum::http::HeaderMap) -> Option<&str> {

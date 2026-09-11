@@ -1,10 +1,15 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{
+        Path, Query, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
+    response::IntoResponse,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::auth::AuthUser;
@@ -327,5 +332,139 @@ pub async fn exec_sandbox(
         other => Err(Error::Internal(anyhow::anyhow!(
             "invalid sandbox state: {other}"
         ))),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StreamQuery {
+    pub argv: Option<String>,
+}
+
+pub async fn stream_sandbox(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(id): Path<String>,
+    Query(query): Query<StreamQuery>,
+    ws: WebSocketUpgrade,
+) -> Result<impl IntoResponse> {
+    let row_state: Option<String> =
+        sqlx::query_scalar("SELECT state FROM sandboxes WHERE id = ? AND user_id = ?")
+            .bind(&id)
+            .bind(&user.id)
+            .fetch_optional(&state.db)
+            .await?;
+    let Some(row_state) = row_state else {
+        return Err(Error::NotFound(format!("sandbox {id}")));
+    };
+
+    if row_state != "running" {
+        return Err(Error::Conflict(format!(
+            "sandbox is not running (state: {row_state})"
+        )));
+    }
+
+    let sock = state
+        .cells
+        .sock(&id)
+        .await
+        .ok_or_else(|| Error::NotImplemented("cell socket unavailable".into()))?;
+
+    let argv: Vec<String> = if let Some(raw) = query.argv {
+        serde_json::from_str(&raw)
+            .unwrap_or_else(|_| raw.split_whitespace().map(String::from).collect())
+    } else {
+        vec!["zene".to_string(), "acp".to_string()]
+    };
+
+    Ok(ws.on_upgrade(move |socket| handle_ws_stream(socket, sock, argv)))
+}
+
+async fn handle_ws_stream(socket: WebSocket, sock_path: std::path::PathBuf, argv: Vec<String>) {
+    use futures_util::{SinkExt, StreamExt};
+
+    let (mut ws_sender, mut ws_receiver) = socket.split();
+
+    let cell_stream = match cell::connect_stream(&sock_path, &argv).await {
+        Ok(s) => s,
+        Err(err) => {
+            tracing::warn!(error = %err, "failed to connect cell stream");
+            let _ = ws_sender
+                .send(Message::Text(
+                    serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "error": { "code": -32000, "message": format!("cell stream connect error: {err}") }
+                    })
+                    .to_string()
+                    .into(),
+                ))
+                .await;
+            return;
+        }
+    };
+
+    let (mut cell_reader, mut cell_writer) = (cell_stream.reader, cell_stream.writer);
+
+    let mut ws_to_cell = tokio::spawn(async move {
+        while let Some(msg) = ws_receiver.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    let mut bytes = text.as_bytes().to_vec();
+                    if !bytes.ends_with(b"\n") {
+                        bytes.push(b'\n');
+                    }
+                    if let Err(e) = cell_writer.write_all(&bytes).await {
+                        tracing::debug!(error = %e, "cell write error");
+                        break;
+                    }
+                }
+                Ok(Message::Binary(bin)) => {
+                    if let Err(e) = cell_writer.write_all(&bin).await {
+                        tracing::debug!(error = %e, "cell write error");
+                        break;
+                    }
+                }
+                Ok(Message::Close(_)) => {
+                    break;
+                }
+                Ok(Message::Ping(_)) | Ok(Message::Pong(_)) => {}
+                Err(e) => {
+                    tracing::debug!(error = %e, "ws recv error");
+                    break;
+                }
+            }
+        }
+        let _ = cell_writer.shutdown().await;
+    });
+
+    let mut cell_to_ws = tokio::spawn(async move {
+        let mut buf = [0u8; 4096];
+        loop {
+            match cell_reader.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    if let Err(e) = ws_sender
+                        .send(Message::Binary(buf[..n].to_vec().into()))
+                        .await
+                    {
+                        tracing::debug!(error = %e, "ws send error");
+                        break;
+                    }
+                }
+                Err(err) => {
+                    tracing::debug!(error = %err, "cell read error");
+                    break;
+                }
+            }
+        }
+        let _ = ws_sender.close().await;
+    });
+
+    tokio::select! {
+        _ = &mut ws_to_cell => {
+            cell_to_ws.abort();
+        }
+        _ = &mut cell_to_ws => {
+            ws_to_cell.abort();
+        }
     }
 }
