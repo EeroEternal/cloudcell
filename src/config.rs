@@ -12,6 +12,7 @@ pub struct Config {
     pub sand_bin: Option<PathBuf>,
     pub data_dir: PathBuf,
     pub rootfs_dir: PathBuf,
+    pub cache_dir: PathBuf,
 }
 
 impl Default for Config {
@@ -30,6 +31,7 @@ impl Default for Config {
             sand_bin: None,
             data_dir: PathBuf::from("data"),
             rootfs_dir: PathBuf::from("data/snapshots"),
+            cache_dir: PathBuf::from("data/cache"),
         }
     }
 }
@@ -69,15 +71,23 @@ impl Config {
         if let Ok(dir) = std::env::var("CLOUDCELL_DATA_DIR")
             && !dir.is_empty()
         {
-            cfg.data_dir = PathBuf::from(dir);
+            cfg.data_dir = PathBuf::from(&dir);
             if std::env::var("CLOUDCELL_ROOTFS_DIR").is_err() {
                 cfg.rootfs_dir = cfg.data_dir.join("snapshots");
+            }
+            if std::env::var("CLOUDCELL_CACHE_DIR").is_err() {
+                cfg.cache_dir = cfg.data_dir.join("cache");
             }
         }
         if let Ok(dir) = std::env::var("CLOUDCELL_ROOTFS_DIR")
             && !dir.is_empty()
         {
             cfg.rootfs_dir = PathBuf::from(dir);
+        }
+        if let Ok(dir) = std::env::var("CLOUDCELL_CACHE_DIR")
+            && !dir.is_empty()
+        {
+            cfg.cache_dir = PathBuf::from(dir);
         }
         cfg
     }

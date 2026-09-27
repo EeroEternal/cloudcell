@@ -39,7 +39,15 @@ pub struct SpawnOpts {
     pub pids: u32,
     pub rootfs: Option<PathBuf>,
     pub net_veth: bool,
-    pub egress: Option<String>,
+    pub egress: Vec<String>,
+    /// (host src, in-cell dst) bind mounts — used for warm caches.
+    pub binds: Vec<(PathBuf, String)>,
+    /// 0600 K=V file applied to the cell env (git credentials).
+    pub env_file: Option<PathBuf>,
+    /// (in-cell dst on tmpfs, host src) secret files.
+    pub secrets: Vec<(String, PathBuf)>,
+    /// RAM-backed workspace size instead of the workdir bind.
+    pub workdir_size: Option<u64>,
 }
 
 impl CellRegistry {
@@ -185,9 +193,22 @@ async fn spawn_sand(opts: SpawnOpts) -> Result<CellHandle> {
     if let Some(rootfs) = &opts.rootfs {
         cmd.arg("--rootfs").arg(rootfs);
     }
+    if let Some(size) = opts.workdir_size {
+        cmd.arg("--workdir-size").arg(size.to_string());
+    }
+    for (src, dst) in &opts.binds {
+        cmd.arg("--bind").arg(format!("{}:{}", src.display(), dst));
+    }
+    if let Some(file) = &opts.env_file {
+        cmd.arg("--env-file").arg(file);
+    }
+    for (dst, src) in &opts.secrets {
+        cmd.arg("--secret")
+            .arg(format!("{}={}", dst, src.display()));
+    }
     if opts.net_veth {
         cmd.arg("--net").arg("veth");
-        if let Some(egress) = &opts.egress {
+        for egress in &opts.egress {
             cmd.arg("--egress").arg(egress);
         }
     } else {
@@ -206,6 +227,15 @@ async fn spawn_sand(opts: SpawnOpts) -> Result<CellHandle> {
         .ok_or_else(|| Error::Internal(anyhow::anyhow!("sand stderr not piped")))?;
     let mut reader = BufReader::new(stderr);
     let sock = wait_for_sock(&mut child, &mut reader).await?;
+
+    // `sand` read the env file and secrets during option parsing; drop the
+    // host copies so tokens/keys don't linger on disk.
+    if let Some(file) = &opts.env_file {
+        let _ = tokio::fs::remove_file(file).await;
+    }
+    for (_, src) in &opts.secrets {
+        let _ = tokio::fs::remove_file(src).await;
+    }
 
     tokio::spawn(async move {
         let mut line = String::new();

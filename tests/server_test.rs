@@ -303,9 +303,10 @@ async fn test_snapshot_catalog_requires_auth() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let json = json_body(response).await;
-    assert_eq!(json.as_array().unwrap().len(), 4);
+    assert_eq!(json.as_array().unwrap().len(), 5);
     assert_eq!(json[0]["status"], "declared");
     assert!(json.as_array().unwrap().iter().any(|s| s["id"] == "rust"));
+    assert!(json.as_array().unwrap().iter().any(|s| s["id"] == "go"));
 }
 
 #[tokio::test]
@@ -413,4 +414,59 @@ async fn test_sqlite_persists_across_pools() {
     let listed_json = json_body(listed).await;
     assert_eq!(listed_json[0]["id"], sandbox_id);
     let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn test_create_validates_caches_disk_and_git() {
+    let (app, mailer) = harness().await;
+    let key = register_session(&app, &mailer).await;
+
+    let bad_cache = app
+        .clone()
+        .oneshot(json_req(
+            "POST",
+            "/api/v1/sandboxes",
+            &key,
+            r#"{"caches":["bogus"]}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(bad_cache.status(), StatusCode::BAD_REQUEST);
+
+    let bad_git = app
+        .clone()
+        .oneshot(json_req("POST", "/api/v1/sandboxes", &key, r#"{"git":{}}"#))
+        .await
+        .unwrap();
+    assert_eq!(bad_git.status(), StatusCode::BAD_REQUEST);
+
+    let zero_disk = app
+        .clone()
+        .oneshot(json_req(
+            "POST",
+            "/api/v1/sandboxes",
+            &key,
+            r#"{"disk_bytes":0}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(zero_disk.status(), StatusCode::BAD_REQUEST);
+
+    let ok = app
+        .oneshot(json_req(
+            "POST",
+            "/api/v1/sandboxes",
+            &key,
+            r#"{"caches":["cargo","pip"],"disk_bytes":1048576}"#,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+    let json = json_body(ok).await;
+    let caches = json["caches"].as_array().unwrap();
+    assert_eq!(caches.len(), 2);
+    assert_eq!(caches[0], "cargo");
+    assert_eq!(json["disk_bytes"].as_u64(), Some(1048576));
+    // git secrets are never echoed back
+    assert!(json.get("git").is_none());
 }

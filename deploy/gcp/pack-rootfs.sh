@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 # Pack snapshot trees for sand --rootfs. Run on the cell node.
+#
+# LEGACY: this copies whatever the host happens to have installed, so the
+# same "rust" snapshot silently changes across nodes/time.  Prefer the
+# content-addressed OCI importer next to this file:
+#
+#   sudo deploy/gcp/import-oci.sh rust docker://docker.io/library/rust:1.83-bookworm rust
+#
+# Keep this only for air-gapped hosts or when no OCI image exists.
 set -euo pipefail
 AGENTCELL="${AGENTCELL:-$HOME/agentcell}"
 OUT="${CLOUDCELL_ROOTFS_DIR:-/var/lib/cloudcell/snapshots}"

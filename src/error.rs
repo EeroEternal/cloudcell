@@ -33,6 +33,10 @@ pub enum Error {
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 
+    /// A declared snapshot has no packed rootfs on this node.
+    #[error("snapshot_not_packed: {0}")]
+    SnapshotNotPacked(String),
+
     #[error("Internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }
@@ -46,17 +50,21 @@ impl IntoResponse for Error {
             Error::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             Error::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             Error::NotImplemented(msg) => (StatusCode::NOT_IMPLEMENTED, msg.clone()),
+            Error::SnapshotNotPacked(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             Error::Database(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
             Error::Config(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             Error::Internal(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
         };
 
-        let body = Json(json!({
-            "error": {
-                "message": message,
-                "code": status.as_u16(),
-            }
-        }));
+        let mut error = json!({
+            "message": message,
+            "code": status.as_u16(),
+        });
+        if matches!(self, Error::SnapshotNotPacked(_)) {
+            error["reason"] = json!("snapshot_not_packed");
+        }
+
+        let body = Json(json!({ "error": error }));
 
         (status, body).into_response()
     }
