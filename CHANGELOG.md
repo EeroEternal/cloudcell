@@ -2,6 +2,18 @@
 
 All notable changes to the Cloudcell control plane.
 
+## Unreleased
+
+### Added
+
+- `POST /sandboxes` validates the `egress` list (bad host / IPv6 literal /
+  bad port / empty → 400 `egress_invalid`) and dedups it.
+- Boot/first-create probe of `sand --capabilities`; create fails with 400
+  if the binary lacks `egress_multi` / `egress_refresh` / `egress_resolv`.
+- Create returns **502** (`egress could not be provisioned`) when the cell
+  runtime cannot provision the requested egress, instead of a cell with no
+  network.
+
 ## 0.2.0 — 2026-09-27
 
 ### Added
