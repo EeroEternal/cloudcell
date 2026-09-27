@@ -114,6 +114,77 @@ fn ensure_egress(egress: &mut Vec<String>, host: &str) {
     }
 }
 
+/// Validate `HOST[:PORT]` entries, rejecting empty/whitespace hosts, IPv6
+/// literals (the cell rules are AF_INET) and bad ports; dedups in place.
+fn validate_egress(egress: &mut Vec<String>) -> std::result::Result<(), String> {
+    let mut seen: Vec<String> = Vec::new();
+    for raw in egress.iter() {
+        let spec = raw.trim();
+        if spec.is_empty() {
+            return Err("egress_invalid: empty entry".into());
+        }
+        if spec.chars().any(|c| c <= ' ' || c == '[' || c == ']') {
+            return Err(format!("egress_invalid: {raw:?} (no spaces or brackets)"));
+        }
+        let (host, port) = match spec.rsplit_once(':') {
+            Some((h, p)) if !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()) => (h, Some(p)),
+            _ => (spec, None),
+        };
+        if host.is_empty() || host.contains(':') {
+            return Err(format!(
+                "egress_invalid: {raw:?} (IPv6 literals unsupported)"
+            ));
+        }
+        if !host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+        {
+            return Err(format!("egress_invalid: {raw:?} (bad host)"));
+        }
+        if let Some(p) = port
+            && !matches!(p.parse::<u16>(), Ok(1..=65535))
+        {
+            return Err(format!("egress_invalid: {raw:?} (bad port)"));
+        }
+        let norm = match port {
+            Some(p) => format!("{host}:{p}"),
+            None => host.to_string(),
+        };
+        if !seen.iter().any(|s| s.eq_ignore_ascii_case(&norm)) {
+            seen.push(norm);
+        }
+    }
+    *egress = seen;
+    Ok(())
+}
+
+/// Probe the cell binary once; a stale `sand` without the flags this
+/// control plane passes must fail loudly, not hand back a broken sandbox.
+async fn probe_caps(bin: &std::path::Path) -> std::result::Result<(), String> {
+    let out = tokio::process::Command::new(bin)
+        .arg("--capabilities")
+        .output()
+        .await
+        .map_err(|e| format!("cannot run {} --capabilities: {e}", bin.display()))?;
+    if !out.status.success() {
+        return Err(format!(
+            "{} --capabilities failed ({})",
+            bin.display(),
+            out.status
+        ));
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    for need in ["egress_multi=1", "egress_refresh=1", "egress_resolv=1"] {
+        if !text.contains(need) {
+            return Err(format!(
+                "sand binary is missing {need}; rebuild agentcell (got: {})",
+                text.trim()
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Turn a nonzero exec into a machine-readable reason: `oom`, `disk_full`,
 /// `network_denied` (with the offending host when we can parse it) or
 /// `nonzero`.
@@ -317,6 +388,9 @@ pub async fn create_sandbox(
         }
     }
 
+    let mut egress = body.egress.unwrap_or_default();
+    validate_egress(&mut egress).map_err(Error::BadRequest)?;
+
     let mut sandbox = Sandbox {
         id: Uuid::new_v4().to_string(),
         snapshot,
@@ -324,7 +398,7 @@ pub async fn create_sandbox(
         cpu,
         mem_bytes,
         pids,
-        egress: body.egress.unwrap_or_default(),
+        egress,
         caches,
         disk_bytes,
         created_at: Utc::now(),
@@ -334,13 +408,18 @@ pub async fn create_sandbox(
     let caches_json =
         serde_json::to_string(&sandbox.caches).map_err(|e| Error::Internal(anyhow::anyhow!(e)))?;
 
-    if let Some(sand) = &state.config.sand_bin
-        && !sand.is_file()
-    {
-        return Err(Error::Config(format!(
-            "sand binary not found: {}",
-            sand.display()
-        )));
+    if let Some(sand) = &state.config.sand_bin {
+        if !sand.is_file() {
+            return Err(Error::Config(format!(
+                "sand binary not found: {}",
+                sand.display()
+            )));
+        }
+        // Refuse to run against a `sand` that lacks the flags below.
+        let caps = state.caps.get_or_init(|| probe_caps(sand)).await;
+        if let Err(e) = caps {
+            return Err(Error::Config(e.clone()));
+        }
     }
     // Fail fast: a declared snapshot with no packed rootfs on this node
     // would otherwise silently fall back to the host's live /usr.
@@ -499,6 +578,12 @@ pub async fn create_sandbox(
                     .bind(&sandbox.id)
                     .execute(&state.db)
                     .await;
+                let msg = err.to_string();
+                if msg.contains("egress unavailable") || msg.contains("egress_unresolved") {
+                    return Err(Error::BadGateway(format!(
+                        "egress could not be provisioned: {msg}"
+                    )));
+                }
                 return Err(err);
             }
         }
@@ -774,6 +859,25 @@ mod tests {
 
         let nonzero = classify_failure(2, "boom").unwrap();
         assert_eq!(nonzero["reason"], "nonzero");
+    }
+
+    #[test]
+    fn egress_validation() {
+        let mut ok = vec!["crates.io".into(), "static.crates.io:443".into()];
+        assert!(validate_egress(&mut ok).is_ok());
+        assert_eq!(ok, vec!["crates.io", "static.crates.io:443"]);
+
+        let mut dup = vec!["a.example".into(), "A.example".into()];
+        assert!(validate_egress(&mut dup).is_ok());
+        assert_eq!(dup.len(), 1);
+
+        for bad in ["bad host", "::1", "[::1]:443", "a:0", "a:99999", ""] {
+            let mut v = vec![bad.to_string()];
+            assert!(
+                validate_egress(&mut v).is_err(),
+                "{bad:?} should be rejected"
+            );
+        }
     }
 
     #[test]

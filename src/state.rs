@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use sqlx::SqlitePool;
+use tokio::sync::OnceCell;
 
 use crate::cell::CellRegistry;
 use crate::config::Config;
@@ -10,6 +13,8 @@ pub struct AppState {
     pub db: SqlitePool,
     pub cells: CellRegistry,
     pub mailer: Mailer,
+    /// Lazily probes `sand --capabilities` once per process.
+    pub caps: Arc<OnceCell<std::result::Result<(), String>>>,
 }
 
 impl AppState {
@@ -19,6 +24,7 @@ impl AppState {
             db,
             cells: CellRegistry::new(),
             mailer: Mailer::log(),
+            caps: Arc::new(OnceCell::new()),
         }
     }
 

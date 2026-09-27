@@ -30,6 +30,10 @@ pub enum Error {
     #[error("{0}")]
     Conflict(String),
 
+    /// Upstream (cell runtime) refused: bad egress, missing feature, …
+    #[error("{0}")]
+    BadGateway(String),
+
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 
@@ -46,6 +50,7 @@ impl IntoResponse for Error {
         let (status, message) = match &self {
             Error::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             Error::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
+            Error::BadGateway(msg) => (StatusCode::BAD_GATEWAY, msg.clone()),
             Error::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             Error::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             Error::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),

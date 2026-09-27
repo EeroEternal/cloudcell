@@ -257,11 +257,12 @@ async fn wait_for_sock(
 ) -> Result<PathBuf> {
     let deadline = Instant::now() + SERVE_WAIT;
     let mut line = String::new();
+    let mut tail = String::new();
     loop {
         if Instant::now() > deadline {
             let _ = child.kill().await;
             return Err(Error::Internal(anyhow::anyhow!(
-                "timed out waiting for sand serve socket"
+                "timed out waiting for sand serve socket: {tail}"
             )));
         }
         if let Some(status) = child
@@ -269,19 +270,24 @@ async fn wait_for_sock(
             .map_err(|e| Error::Internal(anyhow::anyhow!("wait sand: {e}")))?
         {
             return Err(Error::Internal(anyhow::anyhow!(
-                "sand exited before serving (status {status})"
+                "sand exited before serving (status {status}): {tail}"
             )));
         }
         line.clear();
         match timeout(Duration::from_millis(200), reader.read_line(&mut line)).await {
             Ok(Ok(0)) => {
                 return Err(Error::Internal(anyhow::anyhow!(
-                    "sand closed stderr before serving"
+                    "sand closed stderr before serving: {tail}"
                 )));
             }
             Ok(Ok(_)) => {
                 if let Some(sock) = parse_sock_line(&line) {
                     return Ok(sock);
+                }
+                tail.push_str(line.trim_end());
+                tail.push(' ');
+                if tail.len() > 400 {
+                    tail.drain(..tail.len() - 400);
                 }
             }
             Ok(Err(e)) => {
