@@ -30,6 +30,7 @@ Open `http://127.0.0.1:5173`. The Vite dev server proxies `/api` to `:8080`.
 | `docs/sandbox.md` | Honest API contract |
 | `docs/deploy.md` | Pages + GCP + Tunnel |
 | `AGENTS.md` | Agent entry (do not inflate) |
+| `CHANGELOG.md` | Release notes |
 
 ## Deploy
 

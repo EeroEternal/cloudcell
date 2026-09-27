@@ -30,3 +30,23 @@ sudo cloudflared service install
 ```
 
 `agentlsm` / `sand` are **not** started by this unit. Wire them in a later milestone; until then `/api/v1/sandboxes/{id}/exec` returns 501.
+
+## Snapshots
+
+Import OCI images (preferred — content-addressed, no host drift):
+
+```bash
+sudo apt-get install -y skopeo umoci   # or use docker:REF / dir:PATH
+sudo deploy/gcp/import-oci.sh rust docker://docker.io/library/rust:1.83-bookworm rust
+sudo deploy/gcp/import-oci.sh go   docker://docker.io/library/golang:1.23-bookworm go
+# no skopeo/umoci? flatten a local image with the docker daemon:
+sudo deploy/gcp/import-oci.sh go docker:golang:1.23-bookworm go
+# or register an already-unpacked tree (hash-addressed, air-gapped):
+sudo deploy/gcp/import-oci.sh base dir:/var/lib/cloudcell/base-tree shell
+curl -sS localhost:8080/api/v1/snapshots
+```
+
+Each image lands once under `/var/lib/cloudcell/snapshots/blobs/<digest>` and
+`index.json` maps the name to that digest. Re-importing the same digest is a
+no-op; pin `docker://image@sha256:…` for reproducible CI. `deploy/gcp/pack-rootfs.sh`
+still works as a legacy host-extraction fallback but is not recommended.

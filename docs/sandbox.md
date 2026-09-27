@@ -13,23 +13,42 @@ This file is the domain spec for `/api/v1/sandboxes`. Anything not listed as **i
 | POST | `/api/v1/sandboxes/{id}/exec` | AgentCell serve protocol when a live cell exists; otherwise **501** / **409** |
 | GET | `/api/v1/sandboxes/{id}/stream` | WebSocket duplex stdio stream (AgentCell serve protocol v2 / ACP bridge) |
 | GET | `/api/v1/sandboxes/{id}/acp` | Alias for `/stream` defaulting to `argv=["zene","acp"]` |
-| GET | `/api/v1/snapshots` | Static catalog (`base`, `python-3.12`, `node-22`, `rust`), status **`declared`** |
+| GET | `/api/v1/snapshots` | Built-ins (`base`, `python-3.12`, `node-22`, `rust`, `go`) plus imported OCI snapshots; each has `status: declared`, `packed: true/false`, and imported ones carry `digest`/`image` |
 | GET/POST | `/api/v1/keys` | Per-user. Create returns plaintext **once**; store is SHA-256 only |
 | DELETE | `/api/v1/keys/{id}` | Immediate invalidate |
 | POST | `/api/v1/keys/{id}/rotate` | New plaintext once; old hash dropped |
 
 Auth: session (`cc_sess_…`) or API key (`cc_live_…`). Both resolve to a `user_id`; sandboxes and keys are scoped to that user. Register is email → send-code → password. Mail: `CF_EMAIL_*` or `MAIL_*`; otherwise the code is logged (dev).
 
-Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`, `--net none`. Unknown snapshot → 400.
+Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`, `--net none`. Unknown snapshot → 400. When `CLOUDCELL_SAND` is set, a snapshot with no packed rootfs on this node is **not** silently downgraded to the host `/usr`: create fails fast with **400** and `error.reason = "snapshot_not_packed"`.
+
+`egress` is a repeatable list of `HOST[:PORT]` (port defaults to 443). Every A record of each host is allowlisted. Caveat: the daemon resolves with the **host's** resolver while the cell resolves with the resolvers in its rootfs, and CDNs can answer differently — intermittent `network_denied` on such a node means the two views diverged; align the resolvers or use a host-side proxy. `GET /snapshots` reports `packed` per snapshot so an agent can check readiness before creating.
+
+`POST .../exec` default `timeout_ms` is **600000** (10 minutes) — long enough for a cold `clone → install → build`; pass `timeout_ms` to shorten or extend per request. On nonzero exit the reply also carries an additive `failure` object: `{ "reason": "oom" | "disk_full" | "network_denied" | "nonzero", "host"?, "detail": ... }` classified from the exit code (137 → OOM) and stderr.
+
+### Warm caches (`caches`)
+
+`caches: ["cargo", "pip", ...]` bind-mounts a stable **per-user** volume from `CLOUDCELL_CACHE_DIR/<user>/<name>` at the path each toolchain reads by default. Known names: `cargo` (`.cargo`), `rustup`, `pip` (`.cache/pip`), `npm`, `go`, `gradle`, `maven`. Cache volumes are **not** deleted when the sandbox is deleted; unknown names → 400.
+
+### Disk cap (`disk_bytes`)
+
+`disk_bytes` makes the workspace a RAM-backed tmpfs of that size instead of the host workdir bind, so a runaway build cannot fill the node disk. It is a hard kernel cap, but tmpfs pages count against `mem_bytes` — size both together. When unset, the workspace is the host bind and disk exhaustion is only detectable (→ `failure.reason = "disk_full"`), not prevented.
+
+### Git auth (`git`)
+
+`git: { token?, ssh_key? }` injects credentials at create and **never persists them**. A `token` (GitHub PAT) becomes cell env (`GITHUB_TOKEN`, `GH_TOKEN`, and a `GIT_CONFIG_*` `insteadOf` rule) delivered via a 0600 env file; `ssh_key` is copied into the cell's `/run/agentcell-git/id_ed25519` (0600, tmpfs) and wired through `GIT_SSH_COMMAND`. Host copies are removed as soon as the cell starts. `github.com:443` (token) / `github.com:22` (ssh) are appended to the egress allowlist automatically.
+
+### OCI snapshots (content-addressed)
+
+`deploy/gcp/import-oci.sh NAME docker://REF [LANGUAGE]` pulls an image (skopeo + umoci), unpacks it under `CLOUDCELL_ROOTFS_DIR/blobs/<digest>` and maps `NAME → digest` in `CLOUDCELL_ROOTFS_DIR/index.json`. `docker:REF` flattens a local image via `docker export`, and `dir:/PATH` imports an already-unpacked tree (hash-addressed) for air-gapped nodes or tests. The control plane reads that index, so imported snapshots appear in `GET /snapshots` (with `digest` + `image`) and can be requested by name. Re-importing the same image digest is a no-op. Pin an exact build by importing a digest ref (`docker://rust@sha256:…`) so "CI passed" is reproducible across nodes over time; `index.json` is the only mutable state and the rootfs tree is never edited in place. This replaces the host-extraction drift of `deploy/gcp/pack-rootfs.sh` (kept only as a legacy fallback); `go` is the R8 default (import `docker://docker.io/library/golang:1.23-bookworm`).
 
 Local default DB is `sqlite:cloudcell.db`. Production: `CLOUDCELL_DATABASE_URL`.
 
-Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **spawns `sand serve`** (subprocess, not `libagentcell`). Network is loopback-only. Restarting the API marks leftover `running` rows `stopped` (cells die with the process).
+Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **spawns `sand serve`** (subprocess, not `libagentcell`). Cells use `--net veth` with a per-cell egress allowlist (loopback-only when no entries are given, or when the `agentlsm` daemon is absent). Restarting the API marks leftover `running` rows `stopped` (cells die with the process).
 
 ## Not implemented
 
-- Packed snapshot erofs as a single image file (trees under CLOUDCELL_ROOTFS_DIR work)
-- Multiple `--egress` destinations (first allowlist entry is applied)
+- Single-file erofs/squashfs snapshot images (snapshots are unpacked directory trees under `blobs/<digest>`)
 - Preview URLs, PTY, file upload
 - `agentlsm` audit stream
 - Org/project tenancy (per-user isolation only; no orgs yet)
