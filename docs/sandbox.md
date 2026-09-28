@@ -44,7 +44,7 @@ Create defaults: `cpu=1`, `mem_bytes=1GiB`, `pids=64`, `snapshot=base`, `--net n
 
 Local default DB is `sqlite:cloudcell.db`. Production: `CLOUDCELL_DATABASE_URL`.
 
-Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **spawns `sand serve`** (subprocess, not `libagentcell`). Cells use `--net veth` with a per-cell egress allowlist (loopback-only when no entries are given, or when the `agentlsm` daemon is absent). Restarting the API marks leftover `running` rows `stopped` (cells die with the process).
+Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **spawns `sand serve`** (subprocess, not `libagentcell`). A cell with a non-empty `egress` allowlist runs `--net veth`, and `sand` exits nonzero when that egress cannot be provisioned (create then returns **502**); a cell with **no** allowlist runs `--net none`, i.e. loopback-only — `--net veth` without `--egress` is *unrestricted* NAT egress in AgentCell, so it is never requested without a list. Restarting the API marks leftover `running` rows `stopped` (cells die with the process).
 
 ## Not implemented
 
@@ -56,7 +56,7 @@ Set `CLOUDCELL_SAND` to the AgentCell `sand` binary on a Linux node. The API **s
 ## Invariants for the agent milestone
 
 1. One `sand serve` per sandbox. Never reuse a jail across tenants.
-2. Never `--net host`. Prefer `--net veth` + egress allowlist later. Block `169.254.169.254`.
+2. Never `--net host`. Egress is an allowlist (`--net veth --egress …`) or loopback-only (`--net none`); never a veth without `--egress`, which is unrestricted NAT in AgentCell. Block `169.254.169.254`.
 3. Never accept AgentCell's default `memory.max` (60% RAM) on a shared node — create always passes `--mem`.
 4. Gateway stays unprivileged. Root is only `agentlsm`.
 5. Exec talks the serve protocol, not `Command::new("sand")` per request.

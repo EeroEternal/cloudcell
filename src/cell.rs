@@ -38,7 +38,9 @@ pub struct SpawnOpts {
     pub cpu: f64,
     pub pids: u32,
     pub rootfs: Option<PathBuf>,
-    pub net_veth: bool,
+    /// Allowlisted egress destinations. Empty means the cell is loopback-only:
+    /// `--net veth` without `--egress` is *unrestricted* NAT egress, so veth is
+    /// only requested when there is a list to enforce. See [`net_args`].
     pub egress: Vec<String>,
     /// (host src, in-cell dst) bind mounts — used for warm caches.
     pub binds: Vec<(PathBuf, String)>,
@@ -167,6 +169,28 @@ pub async fn connect_stream(sock: &Path, argv: &[String]) -> Result<CellStream> 
     Ok(CellStream { reader, writer })
 }
 
+/// The `--net` group passed to `sand serve`.
+///
+/// `--net veth` *without* `--egress` is unrestricted NAT egress: `agentlsm`
+/// installs the per-cell `DROP` rules only when the request carries at least
+/// one host (`egress_base()` is called from the `n_eg > 0` branch of
+/// `net_up()`), so a cell with no allowlist falls through to the daemon's
+/// global `FORWARD -s 10.200.0.0/16 -j ACCEPT` and can reach anything. A cell
+/// with no allowlist must therefore be loopback-only, which is `--net none`.
+fn net_args(egress: &[String]) -> Vec<String> {
+    let mut args = vec!["--net".to_string()];
+    if egress.is_empty() {
+        args.push("none".to_string());
+    } else {
+        args.push("veth".to_string());
+        for host in egress {
+            args.push("--egress".to_string());
+            args.push(host.clone());
+        }
+    }
+    args
+}
+
 async fn spawn_sand(opts: SpawnOpts) -> Result<CellHandle> {
     tokio::fs::create_dir_all(&opts.workdir)
         .await
@@ -206,14 +230,7 @@ async fn spawn_sand(opts: SpawnOpts) -> Result<CellHandle> {
         cmd.arg("--secret")
             .arg(format!("{}={}", dst, src.display()));
     }
-    if opts.net_veth {
-        cmd.arg("--net").arg("veth");
-        for egress in &opts.egress {
-            cmd.arg("--egress").arg(egress);
-        }
-    } else {
-        cmd.arg("--net").arg("none");
-    }
+    cmd.args(net_args(&opts.egress));
     let mut child = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -303,6 +320,29 @@ mod tests {
     use super::*;
     use tokio::io::AsyncWriteExt;
     use tokio::net::UnixListener;
+
+    #[test]
+    fn empty_egress_is_loopback_only() {
+        // --net veth without --egress is unrestricted NAT egress, so a cell
+        // with no allowlist must not be given a veth at all.
+        assert_eq!(net_args(&[]), ["--net", "none"]);
+    }
+
+    #[test]
+    fn egress_switches_to_veth_and_lists_every_host() {
+        let args = net_args(&["a.example".into(), "b.example:8443".into()]);
+        assert_eq!(
+            args,
+            [
+                "--net",
+                "veth",
+                "--egress",
+                "a.example",
+                "--egress",
+                "b.example:8443"
+            ]
+        );
+    }
 
     #[test]
     fn parse_serving_line() {

@@ -14,6 +14,14 @@ All notable changes to the Cloudcell control plane.
   runtime cannot provision the requested egress, instead of a cell with no
   network.
 
+### Fixed
+
+- A cell created without an `egress` allowlist is now loopback-only
+  (`--net none`). It previously ran `--net veth` with no `--egress`, which is
+  *unrestricted* NAT egress in AgentCell — so the default create path handed
+  out a sandbox that could reach the internet while `docs/sandbox.md` promised
+  loopback-only. A veth is now requested only when there is a list to enforce.
+
 ## 0.2.0 — 2026-09-27
 
 ### Added

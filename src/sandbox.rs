@@ -552,7 +552,6 @@ pub async fn create_sandbox(
                     cpu: sandbox.cpu,
                     pids: sandbox.pids,
                     rootfs: Some(rootfs),
-                    net_veth: true,
                     egress,
                     binds,
                     env_file,
