@@ -8,6 +8,9 @@ This document describes the structure and lifecycle of the `docs/` tree.
 - `docs/design.md`: Single source of truth for UI/UX design specifications.
 - `docs/design/`: Detailed design chapters (tokens, colors, typography, layout, components).
 - `docs/ai/agents/`: Engineering guidelines, commit standards, and agent governance.
+- `docs/dev/`: Pre-implementation proposals and post-release reviews. Claims about
+  existing code, SQL and diagrams must be verified by execution before commit — see
+  the [`verify-design-doc`](../../.agents/skills/verify-design-doc/SKILL.md) skill.
 
 ## Document Lifecycle Discipline
 
