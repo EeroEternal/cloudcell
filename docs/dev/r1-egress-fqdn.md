@@ -1,11 +1,16 @@
 # R1 — FQDN egress that survives CDN rotation
 
-**Status: SHIPPED on both sides, with five verified residual gaps.**
+**Status: SHIPPED on both sides. Of the five §4 gaps, four are closed; G2 remains.**
 The Stage 1 design this document originally proposed landed as **agentcell v0.2.1**
 (`fc3102e`, tagged, clean tree) and, on the **cloudcell** side, on `main` (`7508145`
 + `fcc60b2` — validated egress, the `--capabilities` probe, and 502/409 mapping).
-What remains is §4, one of which defeats v0.2.1's own "loud failure" guarantee, plus
-§5 (the host-side proxy).
+**Update 2026-09-29, re-verified against agentcell v0.2.4 (`502e821`):** G1 closed in
+v0.2.2, G3 and G4 closed in v0.2.3, G5 closed on cloudcell `main` (`f4433ca`); G2 is
+the only §4 item still open. The v0.2.3 certification run on a real node then found
+one more member of the same silent-failure class — egress iptables rules that never
+installed while the replies said OK (#7) — fixed in v0.2.4 and now asserted directly
+against `iptables -S FORWARD` in `tests/run.sh`. §5 (the host-side proxy) remains
+not started.
 
 **Pins for every claim below:**
 
@@ -14,6 +19,9 @@ agentcell  v0.2.1 = fc3102e (== origin/main, clean)
            commits 5c95cd3, 7138471, 9e02844, fc3102e
            published crate: agentcell-0.2.1 (.crate from static.crates.io, 44141 B)
 cloudcell  fcc60b2 (== origin/main when this was written)
+agentcell  v0.2.4 = 502e821 (pin for the §4 status lines: G1 = a600b75, first
+           contained in v0.2.2; G3 = 43d8435 and G4 = ce24341, first in v0.2.3;
+           v0.2.4 adds f93ab2d + 0dfbc0d, the certification-found iptables fixes)
 ```
 
 No SQL is proposed or revised here, so the `verify-design-doc` DDL traps do not
@@ -140,16 +148,33 @@ That was v0.2.0: exit 0, no network, stderr only (and cloudcell forwarded that
 stderr at `tracing::debug`). The daemon also replied `OK` with zero rules installed
 when every host failed to resolve, and discarded an over-long control line.
 
-## 4. Residual gaps (verified against v0.2.1)
+## 4. Residual gaps (verified against v0.2.1; status re-verified against v0.2.4)
 
 Ordered by discovery, not severity — **G5 is the most severe**, because it affects the
 default create path rather than a version-skew edge case.
 
+**Status 2026-09-29 (agentcell v0.2.4 = `502e821`):** G1 **closed** (v0.2.2), G3
+**closed** (v0.2.3), G4 **closed** (v0.2.3), G5 **closed** on cloudcell `main`
+(`f4433ca`). **G2 is the only gap still open.** The v0.2.1-era text of each gap is
+kept as the record of why it existed; the **Status** line at the top of each section
+states what actually happened. Note that v0.2.3's own certification run found the
+loud-failure chain still hollow one level down: `egress_base`/`egress_accept`
+interpolated their op string into a format that already contained the chain name, so
+`iptables -I FORWARD 1 FORWARD …` failed under `2>/dev/null` and the daemon replied
+`OK` with an empty allowlist — fixed in v0.2.4 (f93ab2d, 0dfbc0d), with
+`tests/run.sh` now asserting the per-cell `DROP` and allowlist `ACCEPT` are present
+while a cell is alive and removed on teardown.
+
 ### G1 — `sand` discards the reply counts, so a v0.2.0 daemon still yields a silently network-less cell
 
-**Fix proposed: agentcell PR [#2](https://github.com/EeroEternal/agentcell/pull/2)**
-(branch `fix/netup-reply-counts`, CI green) — not yet merged, so v0.2.1 as
-released still has this hole.
+**Status: CLOSED in agentcell v0.2.2** — PR [#2](https://github.com/EeroEternal/agentcell/pull/2)
+merged (`a600b75`, "require the egress counts agentlsm reports in the NETUP reply"):
+`src/sand.c` now parses five fields and requires `n_hosts == C.n_egress && n_ips > 0`
+whenever egress was requested, so a three-field reply from an old daemon takes the
+`egress unavailable` path instead of passing.
+
+**Original v0.2.1-era text:** the fix was proposed but not yet merged, so v0.2.1 as
+released still had this hole.
 
 The daemon now answers with counts:
 
@@ -214,6 +239,12 @@ requested, so plain `--net veth` is unchanged, and names what the daemon actuall
 
 ### G2 — the daemon has no version or capability surface
 
+**Status: OPEN — re-verified against v0.2.4 (`502e821`)**: `git grep -n "version\|CAPS"
+v0.2.4 -- src/agentlsm.c` still returns nothing, and `LSM_SOCK` remains a
+compile-time constant in `agentlsm.c` (only `sand.c` honors `AGENTCELL_LSM_SOCK`).
+G1's count check makes version skew fail loudly anyway, which is why this is left
+open rather than urgent.
+
 ```console
 $ grep -n "version\|capabilit" src/agentlsm.c
 $                       # no output
@@ -232,7 +263,13 @@ worth doing anyway: a version string can lie, a count cannot.
 
 ### G3 — a `RESOLV`-less `NETUP` silently restores the old skew
 
-`resolve_egress()` falls back to `getaddrinfo` (host stub) when `n_ns == 0`. That
+**Status: CLOSED in agentcell v0.2.3** — PR #6 (`43d8435`): `net_up()` replies
+`ERR egress_no_resolv` when DNS would be needed (`src/agentlsm.c`,
+`egress_no_resolv()`); v0.2.4 (`0dfbc0d`) narrowed it to fire only when a *hostname*
+must resolve, so a literal-IP-only allowlist no longer requires `RESOLV`.
+
+**Original v0.2.1-era text:** `resolve_egress()` falls back to `getaddrinfo` (host
+stub) when `n_ns == 0`. That
 keeps an old `sand` working against a new daemon, but it is exactly the §3.1 bug,
 and it fails the *good* way for the wrong reason: the reply is a valid 5-field `OK`
 with `n_ips > 0`, so even the G1 fix would not flag it.
@@ -242,6 +279,12 @@ with `n_ips > 0`, so even the G1 fix would not flag it.
 cheaper than a client that silently went deaf.
 
 ### G4 — no test covers the control-protocol contract
+
+**Status: CLOSED in agentcell v0.2.3** — PR #5 (`ce24341`): `tests/contract_test.c`
+unit-tests the NETUP reply policy and drain math (`src/netup_reply.h`) against old
+and new reply shapes, and `tests/stub-agentlsm.c` plus `sand`'s
+`AGENTCELL_LSM_SOCK` override (`src/sand.c`) drive the reply branches without root
+or a live daemon.
 
 ```console
 $ grep -n "capabilities\|egress_unresolved\|n_hosts\|NETUP" tests/run.sh
@@ -262,8 +305,16 @@ consistent with the existing harness.
 
 ### G5 — a veth with no allowlist was unrestricted NAT, and cloudcell always asked for one
 
-**Fix proposed: cloudcell PR [#1](https://github.com/EeroEternal/cloudcell/pull/1)**
-(branch `fix/no-veth-without-egress`, CI green) — not yet merged.
+**Status: CLOSED on cloudcell `main`** — `f4433ca` ("never request a veth without an
+egress allowlist"): the network mode is derived from the allowlist (`src/cell.rs`
+`net_args()`: entries → `--net veth --egress …`, empty → `--net none`, unit-tested
+as `net_args(&[]) == ["--net", "none"]`), and `SpawnOpts.net_veth` is gone.
+`agentlsm`'s own `--net veth` semantics are unchanged (see below); agentcell v0.2.2
+additionally made the daemon warn when a veth is built with no allowlist (60dece1).
+
+**Original v0.2.1-era text:** the fix was proposed in cloudcell PR
+[#1](https://github.com/EeroEternal/cloudcell/pull/1) (branch
+`fix/no-veth-without-egress`, CI green) — not yet merged at the time.
 
 Found while reviewing the v0.2.1 egress work, and worse than G1: the *default*
 create path handed out a sandbox that could reach anything.
@@ -361,6 +412,7 @@ Run on this workstation (Arch, kernel 7.2.3, non-root, `unshare -n` denied):
 | G3 | `resolve_egress()` `n_ns == 0` fallback to `getaddrinfo` |
 | G4 | `grep -n capabilities tests/run.sh`; `LSM_SOCK` constant in both files |
 | shipped capabilities output | `./sand --capabilities` |
+| §4 status re-check (2026-09-29, v0.2.4 `502e821`) | `git merge-base --is-ancestor a600b75 v0.2.2` (and `ce24341`/`43d8435` in v0.2.3; `f93ab2d`/`0dfbc0d` not in v0.2.3); `sed -n '1751,1776p' src/sand.c` (G1 five-field + count check); `git grep -n "version\|CAPS" v0.2.4 -- src/agentlsm.c` → empty (G2 open); `grep -n egress_no_resolv src/agentlsm.c` (G3); `ls tests/contract_test.c tests/stub-agentlsm.c` (G4); `grep -n "fn net_args" src/cell.rs` + unit test `net_args(&[]) == ["--net", "none"]` (G5) |
 
 **Not verified, and required before §5 is accepted:** every `iptables`/`nft`/DNAT
 line in §5. This workstation has no root and no netns (`unshare -n` →
