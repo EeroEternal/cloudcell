@@ -17,11 +17,16 @@ export default function PlaygroundPage() {
   const [output, setOutput] = useState("")
   const [running, setRunning] = useState(false)
 
+  const selected = sandboxes.find((row) => row.id === sandboxId)
+
   useEffect(() => {
     api<Sandbox[]>("/api/v1/sandboxes")
       .then((rows) => {
-        setSandboxes(rows)
-        setSandboxId((current) => current || rows[0]?.id || "")
+        const sorted = [...rows].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        )
+        setSandboxes(sorted)
+        setSandboxId((current) => current || sorted[0]?.id || "")
       })
       .catch((err: Error) => toast.error(err.message))
   }, [])
@@ -64,11 +69,17 @@ export default function PlaygroundPage() {
                 onChange={setSandboxId}
                 options={sandboxes.map((row) => ({
                   value: row.id,
-                  label: row.id,
+                  label: `${row.snapshot} · ${row.id.slice(0, 6)}`,
                 }))}
                 emptyText={t("playground.noSandbox", "Create a sandbox first")}
               />
             </div>
+            {selected && (
+              <p className="mt-2 text-label-sm text-muted-foreground">
+                {t(`sandboxes.${selected.state}`, selected.state)} ·{" "}
+                {new Date(selected.created_at).toLocaleString()}
+              </p>
+            )}
           </Card>
           <Card className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-4">
             <Textarea
