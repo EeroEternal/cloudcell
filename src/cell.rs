@@ -73,8 +73,22 @@ impl CellRegistry {
         let Some(mut handle) = self.inner.lock().await.remove(id) else {
             return Ok(());
         };
-        let _ = handle.child.kill().await;
-        let _ = timeout(Duration::from_secs(3), handle.child.wait()).await;
+        // SIGTERM first: `sand serve` turns it into a graceful stop whose exit
+        // path sends NETDOWN (veth + per-cell iptables teardown). A bare
+        // kill() (SIGKILL) skips that, leaking the rules until the daemon
+        // recycles the veth index.
+        if let Some(pid) = handle.child.id() {
+            // SAFETY: pid is a live child of this process; SIGTERM is
+            // delivered only to sand serve, which handles it gracefully.
+            unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        }
+        if timeout(Duration::from_secs(5), handle.child.wait())
+            .await
+            .is_err()
+        {
+            let _ = handle.child.kill().await;
+            let _ = timeout(Duration::from_secs(3), handle.child.wait()).await;
+        }
         Ok(())
     }
 }
